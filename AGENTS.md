@@ -31,8 +31,8 @@ Handlers return Langdock's JSON response verbatim as text. A returned Go error b
 - The stdio smoke test needs a trailing `sleep`, or the transport sees EOF and exits before responding:
 
 ```bash
-(printf '%s\n' \
+go build -o langdock-mcp . && (printf '%s\n' \
   '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}' \
   '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
-  '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'; sleep 1) | go run .
+  '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'; sleep 1) | ./langdock-mcp
 ```
