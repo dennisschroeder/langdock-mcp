@@ -39,8 +39,10 @@ The key is checked lazily. A missing key produces a tool error on the first call
 
 ## Installation
 
+From a clone of this repository (it is private, so `go install …@latest` requires `GOPRIVATE` and Git credentials):
+
 ```bash
-go install github.com/dennisschroeder/langdock-mcp@latest
+go install .
 ```
 
 Claude Code:
