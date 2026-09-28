@@ -1,0 +1,4 @@
+/langdock-mcp
+.DS_Store
+.env
+.env.local
