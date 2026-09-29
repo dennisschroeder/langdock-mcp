@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -371,6 +372,31 @@ type currentAction struct {
 	Name        string       `json:"name"`
 	Description string       `json:"description"`
 	InputFields []InputField `json:"inputFields"`
+}
+
+// UnmarshalJSON sorts input fields by their "order" property, because
+// get_integration does not guarantee sorted fields and update_action resends
+// the list in slice order.
+func (a *currentAction) UnmarshalJSON(b []byte) error {
+	type orderedField struct {
+		InputField
+		Order int `json:"order"`
+	}
+	var raw struct {
+		ID          string         `json:"id"`
+		Name        string         `json:"name"`
+		Description string         `json:"description"`
+		InputFields []orderedField `json:"inputFields"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	sort.SliceStable(raw.InputFields, func(i, j int) bool { return raw.InputFields[i].Order < raw.InputFields[j].Order })
+	*a = currentAction{ID: raw.ID, Name: raw.Name, Description: raw.Description}
+	for _, f := range raw.InputFields {
+		a.InputFields = append(a.InputFields, f.InputField)
+	}
+	return nil
 }
 
 type actionUpdateBody struct {

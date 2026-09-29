@@ -310,3 +310,18 @@ func assertJSONEqual(t *testing.T, got []byte, want string) {
 		t.Errorf("body\n got %s\nwant %s", gb, wb)
 	}
 }
+
+func TestCurrentActionSortsFieldsByOrder(t *testing.T) {
+	var a currentAction
+	raw := `{"id":"a","name":"n","inputFields":[{"slug":"b","label":"second","order":2},{"slug":"a","label":"first","order":1},{"slug":"c","label":"third","order":3}]}`
+	if err := json.Unmarshal([]byte(raw), &a); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, f := range a.InputFields {
+		got = append(got, f.Label)
+	}
+	if strings.Join(got, ",") != "first,second,third" {
+		t.Fatalf("fields not sorted by order: %v", got)
+	}
+}
