@@ -39,10 +39,10 @@ The key is checked lazily. A missing key produces a tool error on the first call
 
 ## Installation
 
-From a clone of this repository (it is private, so `go install …@latest` requires `GOPRIVATE` and Git credentials):
+Download a prebuilt binary for macOS, Linux or Windows from the [releases page](https://github.com/dennisschroeder/langdock-mcp/releases), or build it with Go:
 
 ```bash
-go install .
+go install github.com/dennisschroeder/langdock-mcp@latest
 ```
 
 Claude Code:
@@ -77,3 +77,11 @@ go test ./...
 ```
 
 Tests run the real SDK client against the server over in-memory transports, with an `httptest` server standing in for Langdock.
+
+## Releasing
+
+Push a `v*` tag. CI runs the tests, then GoReleaser builds the binaries and publishes a GitHub release.
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
