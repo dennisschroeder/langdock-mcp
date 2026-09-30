@@ -1,8 +1,27 @@
 # langdock-mcp
 
-An MCP server that exposes Langdock's [Integrations API](https://docs.langdock.com/en/developer/integrations-api/integrations-overview) as tools, so an MCP client such as Claude Code or Claude Desktop can create and maintain custom Langdock integrations, including their actions, triggers, auth configuration and icon.
+[![CI](https://github.com/dennisschroeder/langdock-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/dennisschroeder/langdock-mcp/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/dennisschroeder/langdock-mcp)](https://github.com/dennisschroeder/langdock-mcp/releases/latest)
+[![Go Reference](https://pkg.go.dev/badge/github.com/dennisschroeder/langdock-mcp.svg)](https://pkg.go.dev/github.com/dennisschroeder/langdock-mcp)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+An [MCP](https://modelcontextprotocol.io) server for Langdock's [Integrations API](https://docs.langdock.com/en/developer/integrations-api/integrations-overview). It lets an MCP client such as Claude Code or Claude Desktop create and maintain custom Langdock integrations, including their actions, triggers, auth configuration and icon.
 
 Langdock's own MCP server (`https://api.langdock.com/mcp`) only exposes workspace agents (`find_agent`, `ask_agent`). As of September 2026 there is no official MCP server for the Integrations API.
+
+> This is an independent community project and is not affiliated with or endorsed by Langdock.
+
+## Quick start
+
+1. Have a workspace admin create an API key with the `INTEGRATION_API` scope in the Langdock workspace settings.
+2. [Install the binary](#installation).
+3. Register it with your MCP client and pass the key as `LANGDOCK_API_KEY`.
+
+Then ask your client things like:
+
+- "List my Langdock integrations."
+- "Add an action `get_ticket` to the Jira integration that fetches a ticket by key."
+- "Change only the code of action X, keep its input fields."
 
 ## Tools
 
@@ -37,18 +56,36 @@ The API offers no endpoint to delete an integration.
 
 The key is checked lazily. A missing key produces a tool error on the first call, not a startup failure.
 
+The key can change every integration in the workspace. Store it only in your MCP client configuration, never in a repository. The server does not log it.
+
 ## Installation
 
-Download a prebuilt binary for macOS, Linux or Windows from the [releases page](https://github.com/dennisschroeder/langdock-mcp/releases), or build it with Go:
+### Prebuilt binary
+
+Download the archive for your platform from the [latest release](https://github.com/dennisschroeder/langdock-mcp/releases/latest) (macOS, Linux and Windows, each for amd64 and arm64), verify it against `checksums.txt`, and put `langdock-mcp` on your `PATH`.
+
+On macOS, a binary downloaded with a browser is quarantined by Gatekeeper. Clear the flag once:
+
+```bash
+xattr -d com.apple.quarantine /path/to/langdock-mcp
+```
+
+### With Go
+
+Requires the Go version from `go.mod`.
 
 ```bash
 go install github.com/dennisschroeder/langdock-mcp@latest
 ```
 
+The binary lands in `$(go env GOPATH)/bin`.
+
+## Client setup
+
 Claude Code:
 
 ```bash
-claude mcp add langdock-integrations -s user -e LANGDOCK_API_KEY=<key> -- "$(go env GOPATH)/bin/langdock-mcp"
+claude mcp add langdock-integrations -s user -e LANGDOCK_API_KEY=<key> -- /path/to/langdock-mcp
 ```
 
 Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json`):
@@ -57,7 +94,7 @@ Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json
 {
   "mcpServers": {
     "langdock-integrations": {
-      "command": "/Users/<you>/go/bin/langdock-mcp",
+      "command": "/path/to/langdock-mcp",
       "env": { "LANGDOCK_API_KEY": "<key>" }
     }
   }
@@ -67,6 +104,10 @@ Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json
 ## Protocol
 
 Built on `github.com/modelcontextprotocol/go-sdk` v1.8.0 over stdio. Clients that speak MCP `2026-07-28` reach it through the stateless `server/discover` call, and older clients that use the `initialize` handshake get `2025-11-25` or their own older version.
+
+## Contributing
+
+Issues and pull requests are welcome. Please run the checks below before opening a PR.
 
 ## Development
 
@@ -85,3 +126,7 @@ Push a `v*` tag. CI runs the tests, then GoReleaser builds the binaries and publ
 ```bash
 git tag v0.1.0 && git push origin v0.1.0
 ```
+
+## License
+
+[MIT](LICENSE)
