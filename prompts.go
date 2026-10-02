@@ -152,6 +152,27 @@ func uuidIDs(sc *jsonschema.Schema) {
 	}
 }
 
+// nonNull rejects an explicit null on pointer fields, which the inferred
+// schema allows. The handler would decode it as omitted and drop it, although
+// the API documents null as the way to unset promptFolderId and
+// sharedWithGroupId; the clear* flags send that null instead.
+func nonNull(sc *jsonschema.Schema, props ...string) {
+	for _, p := range props {
+		prop := at(sc, p)
+		var types []string
+		for _, t := range prop.Types {
+			if t != "null" {
+				types = append(types, t)
+			}
+		}
+		if len(types) == 1 {
+			prop.Type, prop.Types = types[0], nil
+		} else if len(prop.Types) > 0 {
+			prop.Types = types
+		}
+	}
+}
+
 func listSchema(sc *jsonschema.Schema) {
 	at(sc, "limit").Minimum = ptr(1.0)
 	at(sc, "limit").Maximum = ptr(250.0)
@@ -159,6 +180,7 @@ func listSchema(sc *jsonschema.Schema) {
 
 func promptSchema(sc *jsonschema.Schema) {
 	uuidIDs(sc)
+	nonNull(sc, "title", "prompt", "promptFolderId", "sharedWithWorkspace")
 	at(sc, "title").MinLength = ptr(2)
 	maxLen(sc, 100, "title")
 	at(sc, "prompt").MinLength = ptr(2)
@@ -167,6 +189,7 @@ func promptSchema(sc *jsonschema.Schema) {
 
 func promptFolderSchema(sc *jsonschema.Schema) {
 	uuidIDs(sc)
+	nonNull(sc, "name", "sharedWithWorkspace", "sharedWithGroupId")
 	at(sc, "name").MinLength = ptr(2)
 	maxLen(sc, 50, "name")
 }

@@ -18,9 +18,9 @@ import (
 // https://<domain>/api/public instead (LANGDOCK_BASE_URL).
 const DefaultBaseURL = "https://api.langdock.com"
 
-// Client is a thin wrapper around Langdock's Integrations, Agents and
-// Knowledge Folder APIs. It returns response bodies verbatim so tools can hand
-// them to the model unchanged.
+// Client is a thin wrapper around Langdock's Integrations, Agents, Knowledge
+// Folder and Prompt Library APIs. It returns response bodies verbatim so tools
+// can hand them to the model unchanged.
 type Client struct {
 	baseURL string
 	apiKey  string
@@ -157,7 +157,7 @@ func knowledgeStatusHint(status int) string {
 	return ""
 }
 
-var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key with the INTEGRATION_API scope (integration tools), the Agent API scope (agent tools) the KNOWLEDGE_FOLDER_API scope (knowledge tools) and the PROMPT_API scope (prompt tools) in the MCP server's environment")
+var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key with the INTEGRATION_API scope (integration tools), the Agent API scope (agent tools), the KNOWLEDGE_FOLDER_API scope (knowledge tools) and the PROMPT_API scope (prompt tools) in the MCP server's environment")
 
 // doJSON sends body (if non-nil) as JSON and returns the raw response body.
 func (c *Client) doJSON(ctx context.Context, method, path string, body any) ([]byte, error) {
