@@ -94,6 +94,43 @@ type RemoveAgentActionsInput struct {
 	PublishOption
 }
 
+type DisableAgentInput struct {
+	AgentID  string `json:"agentId" jsonschema:"UUID of the agent"`
+	Disabled bool   `json:"disabled" jsonschema:"true disables the agent, false enables it again"`
+}
+
+type AgentMessagePart struct {
+	Type      string `json:"type" jsonschema:"text or file"`
+	Text      string `json:"text,omitempty" jsonschema:"content of a text part"`
+	MediaType string `json:"mediaType,omitempty" jsonschema:"MIME type of a file part"`
+	URL       string `json:"url,omitempty" jsonschema:"URL of a file part"`
+	Filename  string `json:"filename,omitempty" jsonschema:"name of a file part"`
+}
+
+type AgentMessageMetadata struct {
+	Attachments []string `json:"attachments,omitempty" jsonschema:"attachment UUIDs from upload_attachment"`
+}
+
+type AgentMessage struct {
+	ID       string                `json:"id,omitempty" jsonschema:"unique message id; generated when omitted"`
+	Role     string                `json:"role"`
+	Parts    []AgentMessagePart    `json:"parts"`
+	Metadata *AgentMessageMetadata `json:"metadata,omitempty"`
+}
+
+type AgentOutput struct {
+	Type   string         `json:"type" jsonschema:"shape of the structured output"`
+	Schema map[string]any `json:"schema,omitempty" jsonschema:"JSON Schema for object and array output"`
+	Enum   []string       `json:"enum,omitempty" jsonschema:"allowed values for enum output"`
+}
+
+type ChatWithAgentInput struct {
+	AgentID  string         `json:"agentId" jsonschema:"UUID of an agent shared with the API key"`
+	Messages []AgentMessage `json:"messages" jsonschema:"conversation so far in Vercel AI SDK UIMessage format, ending with the user's message; resend earlier turns for follow-ups, because the API keeps no conversation state"`
+	Output   *AgentOutput   `json:"output,omitempty" jsonschema:"request structured output, returned in the response's output field"`
+	MaxSteps int            `json:"maxSteps,omitempty" jsonschema:"maximum tool execution steps, 1-20"`
+}
+
 const draftWarning = " The current list is read via get_agent, which returns the published version, so action changes that exist only in the draft are overwritten."
 
 func (s *Server) registerAgents() {
@@ -158,6 +195,32 @@ func (s *Server) registerAgents() {
 			at(sc, "actionIds").MinItems = ptr(1)
 		}),
 	}, s.removeAgentActions)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "disable_agent",
+		Description: "Disable an agent (disabled: true) so users can no longer chat with it, or enable it again (disabled: false). Needs workspace admin rights or the matching permission.",
+		Annotations: destructive,
+		InputSchema: schemaFor[DisableAgentInput](func(sc *jsonschema.Schema) {
+			at(sc, "agentId").Pattern = uuidPattern
+		}),
+	}, s.disableAgent)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "chat_with_agent",
+		Description: "Send a conversation to an agent and return its reply (non-streaming). The agent runs with its configured model, knowledge and actions, so a reply can trigger the agent's actions in connected systems. Langdock aborts requests that take longer than 100 seconds. Attach files with upload_attachment and the message's metadata.attachments.",
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(true)},
+		InputSchema: schemaFor[ChatWithAgentInput](func(sc *jsonschema.Schema) {
+			at(sc, "agentId").Pattern = uuidPattern
+			at(sc, "messages").MinItems = ptr(1)
+			enum(sc, []string{"system", "user", "assistant"}, "messages", "[]", "role")
+			at(sc, "messages", "[]", "parts").MinItems = ptr(1)
+			enum(sc, []string{"text", "file"}, "messages", "[]", "parts", "[]", "type")
+			at(sc, "messages", "[]", "metadata", "attachments", "[]").Pattern = uuidPattern
+			enum(sc, []string{"object", "array", "enum"}, "output", "type")
+			at(sc, "maxSteps").Minimum = ptr(1.0)
+			at(sc, "maxSteps").Maximum = ptr(20.0)
+		}),
+	}, s.chatWithAgent)
 }
 
 func agentSchema(sc *jsonschema.Schema) {
@@ -186,6 +249,34 @@ func agentSchema(sc *jsonschema.Schema) {
 // limit avoids rejecting input Langdock would accept.
 func publishSchema(sc *jsonschema.Schema) {
 	maxLen(sc, 500, "publishDescription")
+}
+
+func (s *Server) disableAgent(ctx context.Context, _ *mcp.CallToolRequest, in DisableAgentInput) (*mcp.CallToolResult, any, error) {
+	return s.call(ctx, http.MethodPatch, "/agent/v1/disable", in)
+}
+
+func (s *Server) chatWithAgent(ctx context.Context, _ *mcp.CallToolRequest, in ChatWithAgentInput) (*mcp.CallToolResult, any, error) {
+	msgs := make([]AgentMessage, len(in.Messages))
+	for i, m := range in.Messages {
+		if m.ID == "" {
+			m.ID = fmt.Sprintf("msg-%d", i+1)
+		}
+		msgs[i] = m
+	}
+	body := map[string]any{"agentId": in.AgentID, "messages": msgs, "stream": false}
+	if in.Output != nil {
+		body["output"] = in.Output
+	}
+	if in.MaxSteps != 0 {
+		body["maxSteps"] = in.MaxSteps
+	}
+	// Completions may legitimately run up to Langdock's 100-second limit,
+	// beyond the default client timeout.
+	raw, err := s.client.doJSONSlow(ctx, http.MethodPost, "/agent/v1/chat/completions", body)
+	if err != nil {
+		return nil, nil, err
+	}
+	return textResult(raw), nil, nil
 }
 
 func (s *Server) getAgent(ctx context.Context, _ *mcp.CallToolRequest, in AgentRef) (*mcp.CallToolResult, any, error) {

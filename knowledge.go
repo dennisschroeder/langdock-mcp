@@ -270,21 +270,7 @@ func (s *Server) replaceKnowledgeFile(ctx context.Context, _ *mcp.CallToolReques
 }
 
 func (s *Server) sendKnowledgeFile(ctx context.Context, method, folderID, filePath string, fields []formField) (*mcp.CallToolResult, any, error) {
-	if !filepath.IsAbs(filePath) {
-		return nil, nil, fmt.Errorf("filePath must be absolute, got %q", filePath)
-	}
-	info, err := os.Stat(filePath)
-	if err != nil {
-		return nil, nil, err
-	}
-	if !info.Mode().IsRegular() {
-		return nil, nil, fmt.Errorf("%s is not a regular file", filePath)
-	}
-	ext := strings.ToLower(filepath.Ext(filePath))
-	if limit := knowledgeFileLimit(ext); info.Size() > limit {
-		return nil, nil, fmt.Errorf("%s is %d bytes, the limit for %s files is %d MB", filePath, info.Size(), ext, limit>>20)
-	}
-	data, err := os.ReadFile(filePath)
+	data, ext, err := readUploadFile(filePath, knowledgeFileLimit)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -293,6 +279,28 @@ func (s *Server) sendKnowledgeFile(ctx context.Context, method, folderID, filePa
 		return nil, nil, err
 	}
 	return textResult(body), nil, nil
+}
+
+// readUploadFile reads a local file for a multipart upload and checks its size
+// against limit(ext) before reading, so an oversized file fails before its
+// bytes are sent.
+func readUploadFile(filePath string, limit func(ext string) int64) ([]byte, string, error) {
+	if !filepath.IsAbs(filePath) {
+		return nil, "", fmt.Errorf("filePath must be absolute, got %q", filePath)
+	}
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return nil, "", err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, "", fmt.Errorf("%s is not a regular file", filePath)
+	}
+	ext := strings.ToLower(filepath.Ext(filePath))
+	if max := limit(ext); info.Size() > max {
+		return nil, "", fmt.Errorf("%s is %d bytes, the limit for %s files is %d MB", filePath, info.Size(), ext, max>>20)
+	}
+	data, err := os.ReadFile(filePath)
+	return data, ext, err
 }
 
 // knowledgeFileLimit mirrors the documented per-type upload limits so an

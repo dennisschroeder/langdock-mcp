@@ -3,7 +3,7 @@
 An MCP server that exposes these Langdock APIs as tools, so that an MCP client such as Claude Code or Claude Desktop can build and administer a Langdock workspace:
 
 - [Integrations API](https://docs.langdock.com/en/developer/integrations-api/integrations-overview): custom integrations with their actions, triggers, auth configuration and icon
-- [Agents API](https://docs.langdock.com/en/developer/agents-api/agents-overview) (build endpoints): agents
+- [Agents API](https://docs.langdock.com/en/developer/agents-api/agents-overview) (build endpoints, disable, chat completions and attachments): agents
 - [Audit Logs API](https://docs.langdock.com/en/developer/audit-logs-api/intro-to-audit-logs-api): the workspace audit log (read-only)
 - [Knowledge Folder API](https://docs.langdock.com/en/developer/knowledge-folder-api/knowledge-folder-overview): files and sharing of knowledge bases
 - [Prompt Library API](https://docs.langdock.com/en/developer/prompts-api/prompts-overview): prompts and prompt folders
@@ -49,6 +49,10 @@ The API offers no endpoint to delete an integration.
 | `publish_agent` | `POST /agent/v1/publish` |
 | `add_agent_actions` | `GET /agent/v1/get`, then `PATCH /agent/v1/update` with the merged action list |
 | `remove_agent_actions` | `GET /agent/v1/get`, then `PATCH /agent/v1/update` with the remaining actions |
+| `disable_agent` | `PATCH /agent/v1/disable` |
+| `chat_with_agent` | `POST /agent/v1/chat/completions` (non-streaming) |
+| `upload_attachment` | `POST /attachment/v1/upload` |
+| `delete_attachment` | `DELETE /attachment/v1/delete` |
 
 `create_agent` and `update_agent` only change the agent's draft. Users see the change once the draft is published, either with `publish_agent` or with `publish: true` (and an optional `publishDescription`) on the write itself. `publish_agent` returns 409 when the draft has no changes.
 
@@ -57,6 +61,8 @@ The API offers no endpoint to delete an integration.
 `add_agent_actions` and `remove_agent_actions` change single actions without resending the list by hand. They read the current list via `get_agent` and therefore start from the published version. Action changes that exist only in the draft are lost. Existing action entries are resent unchanged, including properties the docs do not describe, such as a non-null `connectionId`; null-valued properties are dropped. `remove_agent_actions` writes nothing if one of the ids is not on the agent.
 
 `create_agent` requires `model` (an `id` from `list_agent_models`), because a workspace may have no default model. The API cannot list agents or change who an agent is shared with; both are only possible in the Langdock UI.
+
+`disable_agent` disables an agent (`disabled: true`) or enables it again (`disabled: false`) and needs admin rights. `chat_with_agent` sends a conversation in Vercel AI SDK `UIMessage` format to an agent shared with the key and returns its reply; the API keeps no conversation state, so follow-ups resend the earlier turns. Message ids are generated when omitted, and `output` requests structured output. The agent runs its actions, so a chat can change connected systems. Langdock aborts non-streaming completions after 100 seconds with a 524. `upload_attachment` reads a local file and returns an `attachmentId` for a message's `metadata.attachments` or an agent's `attachments`; `delete_attachment` removes it permanently. Both attachment tools need the `KNOWLEDGE_FOLDER_API` scope.
 
 ## Knowledge tools
 
@@ -177,6 +183,7 @@ Each tool family needs its own scope on the key:
 | Integration tools | `INTEGRATION_API` |
 | Agent tools | Agent API scope, plus access to the agent |
 | `list_audit_logs` | `AUDIT_LOG_API` |
+| Attachment tools | `KNOWLEDGE_FOLDER_API` |
 | Knowledge tools | `KNOWLEDGE_FOLDER_API`, plus access to the knowledge base |
 | Prompt tools | `PROMPT_API` |
 | Scheduled task tools | `AUTOMATION_API` (labelled Scheduled Tasks API), on a service-account workspace key |

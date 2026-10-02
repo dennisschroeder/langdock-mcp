@@ -281,6 +281,7 @@ func (s *Server) register() {
 	}, s.deleteTrigger)
 
 	s.registerAgents()
+	s.registerAttachments()
 	s.registerKnowledge()
 	s.registerPrompts()
 	s.registerUsage()

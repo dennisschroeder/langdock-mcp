@@ -220,3 +220,69 @@ func TestAgentAuthErrorsNameAgentScope(t *testing.T) {
 		}
 	}
 }
+
+func TestDisableAgent(t *testing.T) {
+	cs, fake := connect(t, "k", nil)
+	if text, isErr := callTool(t, cs, "disable_agent", map[string]any{"agentId": testAgentID, "disabled": false}); isErr {
+		t.Fatalf("tool error: %s", text)
+	}
+	req := fake.last(t)
+	if req.Method != "PATCH" || req.Path != "/agent/v1/disable" {
+		t.Errorf("got %s %s", req.Method, req.Path)
+	}
+	assertJSONEqual(t, req.Body, `{"agentId":"`+testAgentID+`","disabled":false}`)
+}
+
+func TestChatWithAgent(t *testing.T) {
+	cs, fake := connect(t, "k", map[string]fakeResponse{
+		"POST /agent/v1/chat/completions": {http.StatusOK, `{"messages":[{"id":"r1","role":"assistant","content":"Hi"}]}`},
+	})
+	args := map[string]any{
+		"agentId": testAgentID,
+		"messages": []any{
+			map[string]any{"role": "user", "parts": []any{map[string]any{"type": "text", "text": "Hello"}}},
+			map[string]any{"id": "m2", "role": "user", "parts": []any{map[string]any{"type": "text", "text": "Summarize"}},
+				"metadata": map[string]any{"attachments": []any{testAgentID}}},
+		},
+		"output":   map[string]any{"type": "enum", "enum": []any{"yes", "no"}},
+		"maxSteps": 3,
+	}
+	text, isErr := callTool(t, cs, "chat_with_agent", args)
+	if isErr || !strings.Contains(text, `"content":"Hi"`) {
+		t.Fatalf("got %v %s", isErr, text)
+	}
+	assertJSONEqual(t, fake.last(t).Body, `{"agentId":"`+testAgentID+`","stream":false,"maxSteps":3,
+		"output":{"type":"enum","enum":["yes","no"]},
+		"messages":[{"id":"msg-1","role":"user","parts":[{"type":"text","text":"Hello"}]},
+			{"id":"m2","role":"user","parts":[{"type":"text","text":"Summarize"}],"metadata":{"attachments":["`+testAgentID+`"]}}]}`)
+}
+
+func TestChatWithAgentRejectsInvalidInput(t *testing.T) {
+	text := []any{map[string]any{"type": "text", "text": "Hi"}}
+	for name, args := range map[string]map[string]any{
+		"no messages": {"agentId": testAgentID, "messages": []any{}},
+		"bad role":    {"agentId": testAgentID, "messages": []any{map[string]any{"role": "tool", "parts": text}}},
+		"bad part":    {"agentId": testAgentID, "messages": []any{map[string]any{"role": "user", "parts": []any{map[string]any{"type": "image"}}}}},
+		"maxSteps":    {"agentId": testAgentID, "messages": []any{map[string]any{"role": "user", "parts": text}}, "maxSteps": 21},
+		"bad agentId": {"agentId": "x", "messages": []any{map[string]any{"role": "user", "parts": text}}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cs, fake := connect(t, "k", nil)
+			if _, isErr := callTool(t, cs, "chat_with_agent", args); !isErr {
+				t.Fatal("expected validation error")
+			}
+			if len(fake.requests) != 0 {
+				t.Fatal("invalid input reached the API")
+			}
+		})
+	}
+}
+
+func TestChatWithAgentTimeoutHint(t *testing.T) {
+	cs, _ := connect(t, "k", map[string]fakeResponse{"POST /agent/v1/chat/completions": {524, ``}})
+	text, isErr := callTool(t, cs, "chat_with_agent", map[string]any{"agentId": testAgentID,
+		"messages": []any{map[string]any{"role": "user", "parts": []any{map[string]any{"type": "text", "text": "Hi"}}}}})
+	if !isErr || !strings.Contains(text, "100-second") {
+		t.Errorf("got %v %q", isErr, text)
+	}
+}
