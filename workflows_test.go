@@ -81,6 +81,12 @@ func TestWorkflowRemoveLimitsSendsNull(t *testing.T) {
 		t.Fatalf("tool error: %s", text)
 	}
 	assertJSONEqual(t, fake.last(t).Body, `{"workflowId":"`+testWorkflowID+`","limits":{"monthlyCostUsd":50,"perRunCostUsd":null,"maxExecutionsPerHour":null}}`)
+
+	args = map[string]any{"workflowId": testWorkflowID, "removeLimits": []any{"perRunCostUsd", "perRunCostUsd"}}
+	if text, isErr := callTool(t, cs, "update_workflow", args); isErr {
+		t.Fatalf("duplicate removeLimits: %s", text)
+	}
+	assertJSONEqual(t, fake.last(t).Body, `{"workflowId":"`+testWorkflowID+`","limits":{"perRunCostUsd":null}}`)
 }
 
 func TestWorkflowLocalValidation(t *testing.T) {
@@ -93,6 +99,10 @@ func TestWorkflowLocalValidation(t *testing.T) {
 		"graphAndMetadata":     {"update_workflow", map[string]any{"workflowId": id, "name": "X", "nodes": []any{}, "edges": []any{}}},
 		"patchAndMetadata":     {"update_workflow", map[string]any{"workflowId": id, "patch": map[string]any{"a": 1}, "limits": map[string]any{"perRunCostUsd": 2}}},
 		"patchAndGraph":        {"update_workflow", map[string]any{"workflowId": id, "patch": map[string]any{"a": 1}, "nodes": []any{}, "edges": []any{}}},
+		"nullLimit":            {"update_workflow", map[string]any{"workflowId": id, "limits": map[string]any{"perRunCostUsd": nil}}},
+		"nullLimitOnCreate":    {"create_workflow", map[string]any{"name": "W", "limits": map[string]any{"monthlyCostUsd": nil}}},
+		"nullDescription":      {"update_workflow", map[string]any{"workflowId": id, "description": nil}},
+		"fractionalExecutions": {"update_workflow", map[string]any{"workflowId": id, "limits": map[string]any{"maxExecutionsPerHour": 1.5}}},
 		"nothing":              {"update_workflow", map[string]any{"workflowId": id}},
 		"setAndRemove":         {"update_workflow", map[string]any{"workflowId": id, "limits": map[string]any{"perRunCostUsd": 2}, "removeLimits": []any{"perRunCostUsd"}}},
 		"triggerAndGraph":      {"create_workflow", map[string]any{"name": "W", "initialTriggerKind": "manual", "nodes": []any{}, "edges": []any{}}},

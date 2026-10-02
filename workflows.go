@@ -59,7 +59,7 @@ type CreateWorkflowInput struct {
 	InitialTriggerKind string `json:"initialTriggerKind,omitempty" jsonschema:"starter trigger; not together with nodes and edges. meeting_end needs Meetings enabled for the key user"`
 	WorkflowGraph
 	ShareWith    *WorkflowShareWith `json:"shareWith,omitempty" jsonschema:"users and groups to share with; needs the shareWorkflows permission"`
-	Limits       *WorkflowLimits    `json:"limits,omitempty" jsonschema:"execution caps; omitted caps use the builder defaults ($25 monthly or the workspace default, $2 per run, 100 executions per hour)"`
+	Limits       *WorkflowLimits    `json:"limits,omitempty" jsonschema:"execution caps; use removeLimits to remove one; omitted caps use the builder defaults ($25 monthly or the workspace default, $2 per run, 100 executions per hour)"`
 	RemoveLimits []string           `json:"removeLimits,omitempty" jsonschema:"caps to create without a limit (sent as null)"`
 }
 
@@ -71,7 +71,7 @@ type UpdateWorkflowInput struct {
 	Timezone    *string `json:"timezone,omitempty" jsonschema:"IANA timezone; ignored when status is INACTIVE"`
 	WorkflowGraph
 	Patch        map[string]any  `json:"patch,omitempty" jsonschema:"incremental graph operations instead of a full nodes and edges replacement"`
-	Limits       *WorkflowLimits `json:"limits,omitempty" jsonschema:"execution caps; omitted caps stay unchanged"`
+	Limits       *WorkflowLimits `json:"limits,omitempty" jsonschema:"execution caps; omitted caps stay unchanged; use removeLimits to remove one"`
 	RemoveLimits []string        `json:"removeLimits,omitempty" jsonschema:"caps to remove (sent as null)"`
 }
 
@@ -142,6 +142,9 @@ func (s *Server) registerWorkflows() {
 		InputSchema: schemaFor[UpdateWorkflowInput](func(sc *jsonschema.Schema) {
 			workflowSchema(sc)
 			enum(sc, workflowStatuses, "status")
+			for _, name := range []string{"name", "description", "status", "timezone"} {
+				notNull(at(sc, name), "string")
+			}
 		}),
 	}, s.updateWorkflow)
 
@@ -203,10 +206,21 @@ func workflowSchema(sc *jsonschema.Schema) {
 	maxLen(sc, 500, "description")
 	limits := at(sc, "limits")
 	for name, hi := range map[string]float64{"monthlyCostUsd": 10000, "perRunCostUsd": 100, "maxExecutionsPerHour": 5000} {
-		at(limits, name).Minimum = ptr(1.0)
-		at(limits, name).Maximum = ptr(hi)
+		c := at(limits, name)
+		c.Minimum = ptr(1.0)
+		c.Maximum = ptr(hi)
+		notNull(c, "number")
 	}
+	notNull(at(limits, "maxExecutionsPerHour"), "integer")
 	enum(sc, workflowLimitNames, "removeLimits", "[]")
+}
+
+// notNull drops the null alternative jsonschema-go infers for pointers,
+// because a null would decode to nil and be dropped silently instead of
+// clearing the field as the docs describe; removeLimits sends the nulls.
+func notNull(sc *jsonschema.Schema, typ string) {
+	sc.Types = nil
+	sc.Type = typ
 }
 
 func (s *Server) listWorkflows(ctx context.Context, _ *mcp.CallToolRequest, in ListWorkflowsInput) (*mcp.CallToolResult, any, error) {
@@ -288,7 +302,7 @@ func workflowBody(in any, limits *WorkflowLimits, remove []string) (map[string]a
 		json.Unmarshal(lb, &merged)
 	}
 	for _, name := range remove {
-		if _, set := merged[name]; set {
+		if v, set := merged[name]; set && v != nil {
 			return nil, fmt.Errorf("limit %s is both set and removed", name)
 		}
 		merged[name] = nil
