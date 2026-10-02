@@ -35,6 +35,15 @@ func TestUploadAttachmentRejectsRelativePath(t *testing.T) {
 	}
 }
 
+func TestUploadAttachmentBlockedTypeHint(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tool.exe")
+	os.WriteFile(path, []byte("MZ"), 0o600)
+	cs, _ := connect(t, "k", map[string]fakeResponse{"POST /attachment/v1/upload": {http.StatusNotAcceptable, ``}})
+	if text, isErr := callTool(t, cs, "upload_attachment", map[string]any{"filePath": path}); !isErr || !strings.Contains(text, "blocked") {
+		t.Errorf("got %v %q", isErr, text)
+	}
+}
+
 func TestDeleteAttachment(t *testing.T) {
 	cs, fake := connect(t, "k", map[string]fakeResponse{
 		"DELETE /attachment/v1/delete": {http.StatusForbidden, `{"message":"no access"}`},

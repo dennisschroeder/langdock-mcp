@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -251,20 +252,35 @@ func TestChatWithAgent(t *testing.T) {
 	if isErr || !strings.Contains(text, `"content":"Hi"`) {
 		t.Fatalf("got %v %s", isErr, text)
 	}
-	assertJSONEqual(t, fake.last(t).Body, `{"agentId":"`+testAgentID+`","stream":false,"maxSteps":3,
+	var sent struct {
+		Messages []map[string]any `json:"messages"`
+	}
+	body := fake.last(t).Body
+	if err := json.Unmarshal(body, &sent); err != nil {
+		t.Fatal(err)
+	}
+	id, _ := sent.Messages[0]["id"].(string)
+	if !strings.HasPrefix(id, "msg-") || len(id) != 20 {
+		t.Errorf("generated id %q", id)
+	}
+	assertJSONEqual(t, []byte(strings.Replace(string(body), id, "GEN", 1)), `{"agentId":"`+testAgentID+`","stream":false,"maxSteps":3,
 		"output":{"type":"enum","enum":["yes","no"]},
-		"messages":[{"id":"msg-1","role":"user","parts":[{"type":"text","text":"Hello"}]},
+		"messages":[{"id":"GEN","role":"user","parts":[{"type":"text","text":"Hello"}]},
 			{"id":"m2","role":"user","parts":[{"type":"text","text":"Summarize"}],"metadata":{"attachments":["`+testAgentID+`"]}}]}`)
 }
 
 func TestChatWithAgentRejectsInvalidInput(t *testing.T) {
 	text := []any{map[string]any{"type": "text", "text": "Hi"}}
 	for name, args := range map[string]map[string]any{
-		"no messages": {"agentId": testAgentID, "messages": []any{}},
-		"bad role":    {"agentId": testAgentID, "messages": []any{map[string]any{"role": "tool", "parts": text}}},
-		"bad part":    {"agentId": testAgentID, "messages": []any{map[string]any{"role": "user", "parts": []any{map[string]any{"type": "image"}}}}},
-		"maxSteps":    {"agentId": testAgentID, "messages": []any{map[string]any{"role": "user", "parts": text}}, "maxSteps": 21},
-		"bad agentId": {"agentId": "x", "messages": []any{map[string]any{"role": "user", "parts": text}}},
+		"no messages":   {"agentId": testAgentID, "messages": []any{}},
+		"bad role":      {"agentId": testAgentID, "messages": []any{map[string]any{"role": "tool", "parts": text}}},
+		"untyped part":  {"agentId": testAgentID, "messages": []any{map[string]any{"role": "user", "parts": []any{map[string]any{"text": "Hi"}}}}},
+		"null messages": {"agentId": testAgentID, "messages": nil},
+		"null parts":    {"agentId": testAgentID, "messages": []any{map[string]any{"role": "user", "parts": nil}}},
+		"output type":   {"agentId": testAgentID, "messages": []any{map[string]any{"role": "user", "parts": text}}, "output": map[string]any{"type": "string"}},
+		"image format":  {"agentId": testAgentID, "messages": []any{map[string]any{"role": "user", "parts": text}}, "imageResponseFormat": "png"},
+		"maxSteps":      {"agentId": testAgentID, "messages": []any{map[string]any{"role": "user", "parts": text}}, "maxSteps": 21},
+		"bad agentId":   {"agentId": "x", "messages": []any{map[string]any{"role": "user", "parts": text}}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			cs, fake := connect(t, "k", nil)
@@ -276,6 +292,26 @@ func TestChatWithAgentRejectsInvalidInput(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A follow-up resends the earlier assistant reply with its reasoning and tool
+// parts, which must pass through unchanged.
+func TestChatWithAgentResendsHistory(t *testing.T) {
+	cs, fake := connect(t, "k", nil)
+	msgs := []any{
+		map[string]any{"id": "s", "role": "system", "parts": []any{map[string]any{"type": "text", "text": "Be brief"}}},
+		map[string]any{"id": "u1", "role": "user", "parts": []any{map[string]any{"type": "file", "mediaType": "application/pdf", "url": "https://example.com/a.pdf", "filename": "a.pdf"}}},
+		map[string]any{"id": "a1", "role": "assistant", "parts": []any{
+			map[string]any{"type": "reasoning", "text": "Reading"},
+			map[string]any{"type": "tool-search", "toolCallId": "c1", "state": "output-available", "input": map[string]any{"q": "x"}, "output": map[string]any{"n": 1}},
+			map[string]any{"type": "text", "text": "Done"}}},
+		map[string]any{"id": "u2", "role": "user", "parts": []any{map[string]any{"type": "text", "text": "More"}}},
+	}
+	if text, isErr := callTool(t, cs, "chat_with_agent", map[string]any{"agentId": testAgentID, "messages": msgs, "imageResponseFormat": "url"}); isErr {
+		t.Fatalf("tool error: %s", text)
+	}
+	want, _ := json.Marshal(map[string]any{"agentId": testAgentID, "stream": false, "imageResponseFormat": "url", "messages": msgs})
+	assertJSONEqual(t, fake.last(t).Body, string(want))
 }
 
 func TestChatWithAgentTimeoutHint(t *testing.T) {
