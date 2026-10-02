@@ -282,6 +282,10 @@ func (s *Server) register() {
 
 	s.registerAgents()
 	s.registerKnowledge()
+	s.registerPrompts()
+	s.registerUsage()
+	s.registerUsers()
+	s.registerWorkflows()
 	s.registerScheduledTasks()
 }
 
