@@ -66,3 +66,19 @@ func (s *Server) listAuditLogs(ctx context.Context, _ *mcp.CallToolRequest, in L
 	}
 	return s.call(ctx, http.MethodGet, path, nil)
 }
+
+// auditLogStatusHint covers the Audit Logs API, whose key scope is tied to a
+// single workspace.
+func auditLogStatusHint(status int) string {
+	switch status {
+	case http.StatusBadRequest:
+		return "invalid parameters, e.g. a malformed date or UUID"
+	case http.StatusUnauthorized:
+		return "invalid or missing API key"
+	case http.StatusForbidden:
+		return "API key lacks the AUDIT_LOG_API scope, or workspace_id is not the API key's workspace"
+	case http.StatusTooManyRequests:
+		return "rate limit of 500 requests/minute exceeded, retry later"
+	}
+	return ""
+}

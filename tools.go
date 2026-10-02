@@ -156,7 +156,7 @@ type TriggerRef struct {
 	TriggerID     string `json:"triggerId" jsonschema:"UUID of the trigger"`
 }
 
-// Server exposes the Integrations, Agents and Knowledge Folder APIs as MCP tools.
+// Server exposes Langdock's public APIs as MCP tools.
 type Server struct {
 	client *Client
 	mcp    *mcp.Server
@@ -282,6 +282,11 @@ func (s *Server) register() {
 
 	s.registerAgents()
 	s.registerKnowledge()
+	s.registerPrompts()
+	s.registerUsage()
+	s.registerUsers()
+	s.registerWorkflows()
+	s.registerScheduledTasks()
 	s.registerAuditLogs()
 }
 
