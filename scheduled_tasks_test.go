@@ -76,6 +76,9 @@ func TestScheduledTaskSchemaRejectsInvalidInput(t *testing.T) {
 		"modelMode":         {"create_scheduled_task", valid(map[string]any{"modelMode": "FIXED"})},
 		"too many tags":     {"create_scheduled_task", valid(map[string]any{"taggedWorkflowIds": make([]any, 21)})},
 		"long skill slug":   {"update_scheduled_task", map[string]any{"automationId": testTaskID, "taggedSkillSlugs": []any{strings.Repeat("s", 101)}}},
+		"null assistant":    {"update_scheduled_task", map[string]any{"automationId": testTaskID, "prompt": "x", "assistantId": nil}},
+		"null timeOfDay":    {"create_scheduled_task", valid(map[string]any{"timeOfDay": nil})},
+		"null tags":         {"create_scheduled_task", valid(map[string]any{"taggedWorkflowIds": nil})},
 		"empty id":          {"pause_scheduled_task", map[string]any{"automationId": ""}},
 		"limit 251":         {"list_scheduled_tasks", map[string]any{"limit": 251}},
 	}

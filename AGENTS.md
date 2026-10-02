@@ -14,9 +14,9 @@ gofmt -l .                          # must print nothing
 
 ## Architecture
 
-Single package: `main.go` (wiring from env) → `client.go` (`Client`, a thin HTTP wrapper returning raw response bodies and `*APIError` for non-2xx) → `tools.go` (Integrations API: input structs, tool registration, handlers, shared schema helpers) `agents.go` (Agents API) and `knowledge.go` (Knowledge Folder API), the latter two registered from `register()`. The go-sdk owns the protocol, and tool input schemas are inferred from the input structs, then patched by `schemaFor` with enums and `maxLength` values that struct tags cannot express. Tool inputs deliberately use the API's camelCase field names so they match the Langdock docs one-to-one.
+Single package: `main.go` (wiring from env) → `client.go` (`Client`, a thin HTTP wrapper returning raw response bodies and `*APIError` for non-2xx) → `tools.go` (Integrations API: input structs, tool registration, handlers, shared schema helpers) `agents.go` (Agents API), `knowledge.go` (Knowledge Folder API) and `scheduled_tasks.go` (Scheduled Tasks API), the latter three registered from `register()`. The go-sdk owns the protocol, and tool input schemas are inferred from the input structs, then patched by `schemaFor` with enums and `maxLength` values that struct tags cannot express. Tool inputs deliberately use the API's camelCase field names so they match the Langdock docs one-to-one.
 
-Handlers return Langdock's JSON response verbatim as text. A returned Go error becomes a tool-level error (`IsError`) the model can read. `APIError` adds a hint per documented status code and picks the hints per API family, which `familyOf` derives from the request path relative to the base URL (`/agent/v1/` for the Agents API, `/knowledge` for the Knowledge Folder API, everything else for the Integrations API).
+Handlers return Langdock's JSON response verbatim as text. A returned Go error becomes a tool-level error (`IsError`) the model can read. `APIError` adds a hint per documented status code and picks the hints per API family, which `familyOf` derives from the request path relative to the base URL (`/agent/v1/` for the Agents API, `/knowledge` for the Knowledge Folder API, `/automations/v1` for the Scheduled Tasks API, everything else for the Integrations API).
 
 ## Invariants
 

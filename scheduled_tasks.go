@@ -37,8 +37,8 @@ type ScheduledTaskSettings struct {
 	DayOfWeek                *int      `json:"dayOfWeek,omitempty" jsonschema:"for WEEKLY: 0 (Sunday) through 6 (Saturday)"`
 	DayOfMonth               *int      `json:"dayOfMonth,omitempty" jsonschema:"for MONTHLY: 1 through 31; months without that day run on their last day"`
 	DaysOfWeek               *[]int    `json:"daysOfWeek,omitempty" jsonschema:"for SELECTED_WEEKDAYS: days 0 (Sunday) through 6 (Saturday)"`
-	Timezone                 *string   `json:"timezone,omitempty" jsonschema:"IANA name such as Europe/Berlin, max 64 characters; empty or omitted is stored as UTC on a scheduled frequency"`
-	ModelMode                *string   `json:"modelMode,omitempty" jsonschema:"EXPLICIT requires modelId in the same request; passing only modelId implies EXPLICIT"`
+	Timezone                 *string   `json:"timezone,omitempty" jsonschema:"IANA name such as Europe/Berlin, max 64 characters; empty is stored as UTC on a scheduled frequency, and so is omitted on create"`
+	ModelMode                *string   `json:"modelMode,omitempty" jsonschema:"EXPLICIT requires modelId in the same request; on create, passing only modelId implies EXPLICIT"`
 	ModelID                  *string   `json:"modelId,omitempty" jsonschema:"model UUID"`
 	AssistantID              *string   `json:"assistantId,omitempty" jsonschema:"UUID of the primary agent; must be available to the API key"`
 	TaggedAssistantID        *string   `json:"taggedAssistantId,omitempty" jsonschema:"UUID of an extra @agent mention; dropped if the key cannot use it"`
@@ -147,10 +147,18 @@ func scheduledTaskSchema(sc *jsonschema.Schema) {
 		at(sc, p).MaxItems = ptr(20)
 	}
 	maxLen(sc, 100, "taggedSkillSlugs", "[]")
+	// Pointer fields are inferred as nullable, but omitempty drops a null
+	// before the request, so an explicit null would be a silent no-op.
+	// Clearing goes through the clear* flags instead.
+	for _, prop := range sc.Properties {
+		if len(prop.Types) == 2 && prop.Types[0] == "null" {
+			prop.Type, prop.Types = prop.Types[1], nil
+		}
+	}
 }
 
 // scheduledTaskID requires a non-empty id, because an empty one addresses the
-// collection instead, such as POST /automations/v1/ for pause.
+// collection instead, such as GET /automations/v1/ for get_scheduled_task.
 func scheduledTaskID(sc *jsonschema.Schema) {
 	at(sc, "automationId").MinLength = ptr(1)
 }
