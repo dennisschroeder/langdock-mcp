@@ -164,7 +164,7 @@ func userStatusHint(status int) string {
 	case http.StatusBadRequest:
 		return "invalid request body or role, or the change would leave the workspace without an active admin"
 	case http.StatusUnauthorized:
-		return "invalid, missing or expired API key, or the key was not created by a workspace admin with the USER_MANAGEMENT_API scope"
+		return "invalid, missing or expired API key, or the admin who created the key no longer exists"
 	case http.StatusForbidden:
 		return "API key lacks the USER_MANAGEMENT_API scope"
 	case http.StatusNotFound:
@@ -173,7 +173,7 @@ func userStatusHint(status int) string {
 	return ""
 }
 
-var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key with the INTEGRATION_API scope (integration tools), the Agent API scope (agent tools) the KNOWLEDGE_FOLDER_API scope (knowledge tools) and the USER_MANAGEMENT_API scope (user tools) in the MCP server's environment")
+var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key with the INTEGRATION_API scope (integration tools), the Agent API scope (agent tools), the KNOWLEDGE_FOLDER_API scope (knowledge tools) and the USER_MANAGEMENT_API scope (user tools) in the MCP server's environment")
 
 // doJSON sends body (if non-nil) as JSON and returns the raw response body.
 func (c *Client) doJSON(ctx context.Context, method, path string, body any) ([]byte, error) {

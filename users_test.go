@@ -72,7 +72,14 @@ func TestUserErrorHints(t *testing.T) {
 		"POST /user-management/v1/deactivate-user":  {http.StatusNotFound, ``},
 		"POST /user-management/v1/invite":           {http.StatusForbidden, ``},
 	})
-	text, isErr := callTool(t, cs, "update_user_role", map[string]any{"email": "a@example.com", "role": "member"})
+	unauthorized, _ := connect(t, "k", map[string]fakeResponse{
+		"POST /user-management/v1/deactivate-user": {http.StatusUnauthorized, ``},
+	})
+	text, isErr := callTool(t, unauthorized, "deactivate_user", map[string]any{"email": "a@example.com"})
+	if !isErr || !strings.Contains(text, "admin who created the key") {
+		t.Errorf("401: got %v %q", isErr, text)
+	}
+	text, isErr = callTool(t, cs, "update_user_role", map[string]any{"email": "a@example.com", "role": "member"})
 	if !isErr || !strings.Contains(text, "400") || !strings.Contains(text, "active admin") || !strings.Contains(text, "last admin") {
 		t.Errorf("400: got %v %q", isErr, text)
 	}
