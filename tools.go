@@ -17,7 +17,7 @@ import (
 
 const (
 	serverName    = "langdock-mcp"
-	serverVersion = "0.1.0"
+	serverVersion = "0.2.0"
 	maxIconBytes  = 20 << 20
 )
 
@@ -154,7 +154,7 @@ type TriggerRef struct {
 	TriggerID     string `json:"triggerId" jsonschema:"UUID of the trigger"`
 }
 
-// Server exposes the Integrations API as MCP tools.
+// Server exposes the Integrations and Agents APIs as MCP tools.
 type Server struct {
 	client *Client
 	mcp    *mcp.Server
@@ -277,6 +277,8 @@ func (s *Server) register() {
 		Description: "Permanently delete a trigger from an integration.",
 		Annotations: destructive,
 	}, s.deleteTrigger)
+
+	s.registerAgents()
 }
 
 func actionSchema(sc *jsonschema.Schema) {

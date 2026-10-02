@@ -14,16 +14,18 @@ gofmt -l .                          # must print nothing
 
 ## Architecture
 
-Single package, three files: `main.go` (wiring from env) → `client.go` (`Client`, a thin HTTP wrapper returning raw response bodies and `*APIError` for non-2xx) → `tools.go` (input structs, tool registration, handlers). The go-sdk owns the protocol, and tool input schemas are inferred from the input structs, then patched by `schemaFor` with enums and `maxLength` values that struct tags cannot express. Tool inputs deliberately use the API's camelCase field names so they match the Langdock docs one-to-one.
+Single package: `main.go` (wiring from env) → `client.go` (`Client`, a thin HTTP wrapper returning raw response bodies and `*APIError` for non-2xx) → `tools.go` (Integrations API: input structs, tool registration, handlers, shared schema helpers) and `agents.go` (Agents API, registered from `register()`). The go-sdk owns the protocol, and tool input schemas are inferred from the input structs, then patched by `schemaFor` with enums and `maxLength` values that struct tags cannot express. Tool inputs deliberately use the API's camelCase field names so they match the Langdock docs one-to-one.
 
-Handlers return Langdock's JSON response verbatim as text. A returned Go error becomes a tool-level error (`IsError`) the model can read. `APIError` adds a hint per documented status code.
+Handlers return Langdock's JSON response verbatim as text. A returned Go error becomes a tool-level error (`IsError`) the model can read. `APIError` adds a hint per documented status code, with separate hints for Agents API paths (`/agent/v1/`).
 
 ## Invariants
 
 - `update_action` must stay a read-merge-write. The API's PUT clears `description` and drops all input fields that are not resent, which would silently destroy an action when a caller only changes its code. `code` and `requiresConfirmation` are preserved by the API when omitted, so they are only sent when given. `jsonSchema` on input fields is not returned by `get_integration` but is preserved server-side when the field slug (derived from its label) is unchanged.
 - `update_trigger` is a full replace and says so in its description. `get_integration` returns no `pollingCode` or trigger input fields, so a merge is impossible.
+- `update_agent` must stay a plain pass-through PATCH, not a read-merge-write. The API already leaves omitted fields unchanged, and `get_agent` returns the published version, so merging from it would overwrite unpublished draft changes. `get_agent` also omits `slug`, `options`, `fileTypes` and `emailDomain` of input fields, so they cannot be round-tripped.
+- `add_agent_actions` / `remove_agent_actions` are read-merge-writes over the published action list and say so in their descriptions. They keep action entries as raw JSON so undocumented properties such as `connectionId` survive; null values are dropped before resending.
 - Never log or echo the API key.
-- Endpoint paths, methods and field limits come from https://docs.langdock.com/en/developer/integrations-api/ (index at https://docs.langdock.com/llms.txt). Re-check there before changing them.
+- Endpoint paths, methods and field limits come from https://docs.langdock.com/en/developer/integrations-api/ and https://docs.langdock.com/en/developer/agents-api/ (index at https://docs.langdock.com/llms.txt). Re-check there before changing them.
 
 ## Gotchas
 

@@ -20,6 +20,7 @@ import (
 type recorded struct {
 	Method      string
 	Path        string
+	Query       string
 	Auth        string
 	ContentType string
 	Body        []byte
@@ -40,7 +41,7 @@ type fakeResponse struct {
 func (f *fakeLangdock) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
 	f.mu.Lock()
-	f.requests = append(f.requests, recorded{r.Method, r.URL.EscapedPath(), r.Header.Get("Authorization"), r.Header.Get("Content-Type"), body})
+	f.requests = append(f.requests, recorded{r.Method, r.URL.EscapedPath(), r.URL.RawQuery, r.Header.Get("Authorization"), r.Header.Get("Content-Type"), body})
 	resp, ok := f.responses[r.Method+" "+r.URL.EscapedPath()]
 	f.mu.Unlock()
 	if !ok {

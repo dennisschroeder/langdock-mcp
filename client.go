@@ -18,7 +18,7 @@ import (
 // https://<domain>/api/public instead (LANGDOCK_BASE_URL).
 const DefaultBaseURL = "https://api.langdock.com"
 
-// Client is a thin wrapper around Langdock's Integrations API. It returns
+// Client is a thin wrapper around Langdock's Integrations and Agents APIs. It returns
 // response bodies verbatim so tools can hand them to the model unchanged.
 type Client struct {
 	baseURL string
@@ -41,11 +41,18 @@ func NewClient(baseURL, apiKey string) *Client {
 type APIError struct {
 	Status int
 	Body   string
+	// Agent marks a response from the Agents API, whose status codes mean
+	// something different than the Integrations API's.
+	Agent bool
 }
 
 func (e *APIError) Error() string {
 	msg := fmt.Sprintf("Langdock API returned %d", e.Status)
-	if hint := statusHint(e.Status); hint != "" {
+	hint := statusHint(e.Status)
+	if e.Agent {
+		hint = agentStatusHint(e.Status)
+	}
+	if hint != "" {
 		msg += " (" + hint + ")"
 	}
 	if e.Body != "" {
@@ -74,7 +81,27 @@ func statusHint(status int) string {
 	return ""
 }
 
-var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key with the INTEGRATION_API scope in the MCP server's environment")
+// agentStatusHint covers the Agents API, where 401/403 typically mean the key
+// was created without the Agent API scope.
+func agentStatusHint(status int) string {
+	switch status {
+	case http.StatusBadRequest:
+		return "invalid parameters, or a referenced model, action, attachment or folder does not exist in the workspace"
+	case http.StatusUnauthorized:
+		return "invalid or missing API key, or the key lacks the Agent API scope"
+	case http.StatusForbidden:
+		return "API key lacks the Agent API scope or has no (edit) access to this agent"
+	case http.StatusNotFound:
+		return "agent not found or not shared with the API key"
+	case http.StatusConflict:
+		return "the draft has no changes to publish"
+	case http.StatusTooManyRequests:
+		return "rate limit exceeded, retry later"
+	}
+	return ""
+}
+
+var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key with the INTEGRATION_API scope (integration tools) and the Agent API scope (agent tools) in the MCP server's environment")
 
 // doJSON sends body (if non-nil) as JSON and returns the raw response body.
 func (c *Client) doJSON(ctx context.Context, method, path string, body any) ([]byte, error) {
@@ -145,7 +172,7 @@ func (c *Client) send(req *http.Request) ([]byte, error) {
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, &APIError{Status: resp.StatusCode, Body: strings.TrimSpace(string(body))}
+		return nil, &APIError{Status: resp.StatusCode, Body: strings.TrimSpace(string(body)), Agent: strings.Contains(req.URL.Path, "/agent/v1/")}
 	}
 	return body, nil
 }
