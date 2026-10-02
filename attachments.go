@@ -26,7 +26,7 @@ func (s *Server) registerAttachments() {
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "delete_attachment",
-		Description: "Permanently delete an attachment. It can no longer be referenced in agent conversations and cannot be restored.",
+		Description: "Delete an attachment. It can no longer be referenced in agent conversations and cannot be restored through the API.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: ptr(true), OpenWorldHint: ptr(true)},
 		InputSchema: schemaFor[AttachmentRef](func(sc *jsonschema.Schema) {
 			at(sc, "attachmentId").Pattern = uuidPattern

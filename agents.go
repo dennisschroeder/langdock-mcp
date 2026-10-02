@@ -111,7 +111,7 @@ type AgentMessage struct {
 	Role string `json:"role"`
 	// Parts stay open maps, because assistant turns from earlier replies carry
 	// reasoning, tool-* and source-* parts that must be resent unchanged.
-	Parts    []map[string]any      `json:"parts" jsonschema:"content parts; user parts are {type: text, text} or {type: file, mediaType, url, filename?}; resend parts of earlier assistant replies unchanged"`
+	Parts    []map[string]any      `json:"parts" jsonschema:"content parts; user parts are {type: text, text} or {type: file, mediaType, url, filename?}; for follow-ups, add each returned assistant message as {id, role: assistant, parts: [{type: text, text: <content>}]}; parts from streaming clients (reasoning, tool-*, source-*) may also be resent unchanged"`
 	Metadata *AgentMessageMetadata `json:"metadata,omitempty"`
 }
 
@@ -123,7 +123,7 @@ type AgentOutput struct {
 
 type ChatWithAgentInput struct {
 	AgentID  string         `json:"agentId" jsonschema:"UUID of an agent shared with the API key"`
-	Messages []AgentMessage `json:"messages" jsonschema:"conversation so far in Vercel AI SDK UIMessage format, ending with the user's message (the API silently drops a trailing non-user message); resend earlier turns for follow-ups, because the API keeps no conversation state"`
+	Messages []AgentMessage `json:"messages" jsonschema:"conversation so far in Vercel AI SDK UIMessage format, ending with the user's message (the API silently drops a trailing non-user message); resend earlier turns, including the agent's replies, for follow-ups, because the API keeps no conversation state"`
 	Output   *AgentOutput   `json:"output,omitempty" jsonschema:"request structured output, returned in the response's output field"`
 	MaxSteps int            `json:"maxSteps,omitempty" jsonschema:"maximum tool execution steps, 1-20"`
 	// ImageResponseFormat matters because b64_json images can push the reply

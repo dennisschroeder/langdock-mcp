@@ -20,9 +20,10 @@ var (
 	knowledgeTargetTypes = []string{"USER", "API_KEY"}
 )
 
-// knowledgeMIMETypes covers the documented file types, because
-// mime.TypeByExtension depends on the host's mime.types and sniffing reports
-// Office files as application/zip, which Langdock's validation rejects.
+// knowledgeMIMETypes covers the documented knowledge file types plus the
+// spreadsheet types attachments accept, because mime.TypeByExtension depends
+// on the host's mime.types and sniffing reports Office files as
+// application/zip, which Langdock's validation rejects.
 var knowledgeMIMETypes = map[string]string{
 	".pdf":  "application/pdf",
 	".doc":  "application/msword",
@@ -39,6 +40,9 @@ var knowledgeMIMETypes = map[string]string{
 	".json": "application/json",
 	".xml":  "application/xml",
 	".vtt":  "text/vtt",
+	".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+	".xls":  "application/vnd.ms-excel",
+	".csv":  "text/csv",
 }
 
 type ListKnowledgeBasesInput struct {

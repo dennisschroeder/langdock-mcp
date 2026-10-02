@@ -25,6 +25,20 @@ func TestUploadAttachment(t *testing.T) {
 	}
 }
 
+// Go's built-in MIME table lacks spreadsheets, and sniffing would report an
+// .xlsx as application/zip.
+func TestUploadAttachmentSpreadsheetType(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "Budget.xlsx")
+	os.WriteFile(path, []byte("PK\x03\x04xl"), 0o600)
+	cs, fake := connect(t, "k", nil)
+	if text, isErr := callTool(t, cs, "upload_attachment", map[string]any{"filePath": path}); isErr {
+		t.Fatalf("tool error: %s", text)
+	}
+	if u := parseUpload(t, fake.last(t)); u.contentType != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" {
+		t.Errorf("content type %q", u.contentType)
+	}
+}
+
 func TestUploadAttachmentRejectsRelativePath(t *testing.T) {
 	cs, fake := connect(t, "k", nil)
 	if text, isErr := callTool(t, cs, "upload_attachment", map[string]any{"filePath": "report.pdf"}); !isErr || !strings.Contains(text, "absolute") {
