@@ -14,9 +14,17 @@ gofmt -l .                          # must print nothing
 
 ## Architecture
 
-Single package: `main.go` (wiring from env) → `client.go` (`Client`, a thin HTTP wrapper returning raw response bodies and `*APIError` for non-2xx) → `tools.go` (Integrations API: input structs, tool registration, handlers, shared schema helpers) `agents.go` (Agents API) and `knowledge.go` (Knowledge Folder API), the latter two registered from `register()`. The go-sdk owns the protocol, and tool input schemas are inferred from the input structs, then patched by `schemaFor` with enums and `maxLength` values that struct tags cannot express. Tool inputs deliberately use the API's camelCase field names so they match the Langdock docs one-to-one.
+Single package: `main.go` (wiring from env) → `client.go` (`Client`, a thin HTTP wrapper returning raw response bodies and `*APIError` for non-2xx) → `tools.go` (Integrations API: input structs, tool registration, handlers, shared schema helpers). Every other API lives in its own file, registered from `register()`:
 
-Handlers return Langdock's JSON response verbatim as text. A returned Go error becomes a tool-level error (`IsError`) the model can read. `APIError` adds a hint per documented status code and picks the hints per API family, which `familyOf` derives from the request path relative to the base URL (`/agent/v1/` for the Agents API, `/knowledge` for the Knowledge Folder API, everything else for the Integrations API).
+- `agents.go`: Agents API
+- `knowledge.go`: Knowledge Folder API
+- `usage.go`: Usage Export API
+- `users.go`: User Management API
+- `workflows.go`: Workflow API and Workflow Run Export API
+
+The go-sdk owns the protocol, and tool input schemas are inferred from the input structs, then patched by `schemaFor` with enums and `maxLength` values that struct tags cannot express. Tool inputs deliberately use the API's camelCase field names so they match the Langdock docs one-to-one.
+
+Handlers return Langdock's JSON response verbatim as text. A returned Go error becomes a tool-level error (`IsError`) the model can read. `APIError` adds a hint per documented status code and picks the hints per API family, which `familyOf` derives from the request path prefix relative to the base URL. Paths without a known prefix belong to the Integrations API. Newer API files keep their own status-hint function, and shared lists (the files above, the scope table in the README, `errNoAPIKey`) hold one entry per line, so parallel API branches merge by keeping both sides.
 
 ## Invariants
 
@@ -27,9 +35,13 @@ Handlers return Langdock's JSON response verbatim as text. A returned Go error b
 - `update_workflow` must stay a plain pass-through PATCH. The docs state that omitted `limits` fields stay unchanged and treat the endpoint as a partial update (a body with no fields is a 400), so omitted metadata is assumed unchanged too; graph writes only touch the draft graph (version `0`), never `activeVersion`. `nodes` and `edges` replace the whole draft, so both are required together. The API rejects metadata and graph changes in one request, and the tool rejects them locally rather than splitting them into two non-atomic writes. Removing a limit needs an explicit `null`, which `removeLimits` sends.
 - `delete_workflow` is permanent and has no confirmation parameter; its description must keep saying so.
 - Multipart uploads (knowledge files and the integration icon) go through a separate `http.Client` with a 10-minute timeout, because knowledge files may be up to 256 MB. Their MIME type comes from the explicit extension map `knowledgeMIMETypes`, because content sniffing reports Office files as `application/zip`, which Langdock rejects.
+- `export_usage` always calls the explicit `/json` or `/csv` route, never the format-less default, and both return a JSON envelope (rows, or a signed download URL). `group_by` is validated per `dataType` locally against `usageGroupBy`, because the schema enum cannot express the dependency. Its field name stays snake_case because the API uses `group_by`.
+- `Client.send` fails with `errResponseTooLarge` instead of truncating bodies over 10 MB, because a cut-off body would reach the model as broken JSON.
+- Usage Export API endpoints come from https://docs.langdock.com/en/developer/usage-export-api/intro-to-usage-export-api.md.
+- `invite_users` sends emails and `update_user_role` / `deactivate_user` change access, so their descriptions must keep stating those side effects. The role enum is lowercase because the API rejects other casing.
 - Never log or echo the API key.
 - `serverVersion` is a `var` because GoReleaser sets it from the tag via `-ldflags -X main.serverVersion=…`. Keep its default in step with the latest tag.
-- Endpoint paths, methods and field limits come from https://docs.langdock.com/en/developer/integrations-api/, https://docs.langdock.com/en/developer/agents-api/ and https://docs.langdock.com/en/developer/knowledge-folder-api/ (index at https://docs.langdock.com/llms.txt). Re-check there before changing them.
+- Endpoint paths, methods and field limits come from https://docs.langdock.com/en/developer/integrations-api/, https://docs.langdock.com/en/developer/agents-api/, https://docs.langdock.com/en/developer/knowledge-folder-api/ and https://docs.langdock.com/en/developer/user-management-api/ (index at https://docs.langdock.com/llms.txt). Re-check there before changing them.
 - Workflow API endpoints come from https://docs.langdock.com/en/developer/workflow-api/workflows-overview.md and the Workflow Run Export API from https://docs.langdock.com/en/developer/workflow-api/intro-to-workflow-api.md. `familyOf` maps `/workflows/v1/` to the Workflow API hints and other `/workflows/` paths to the export hints.
 
 ## Gotchas
