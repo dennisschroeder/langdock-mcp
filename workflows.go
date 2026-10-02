@@ -89,8 +89,8 @@ type ListWorkflowRunsInput struct {
 	RunID      string `json:"runId,omitempty" jsonschema:"only this run"`
 	RunMode    string `json:"runMode,omitempty" jsonschema:"test runs use version 0, production runs a published version"`
 	Status     string `json:"status,omitempty" jsonschema:"run status"`
-	From       string `json:"from,omitempty" jsonschema:"start of the run creation range, ISO 8601 timestamp or YYYY-MM-DD (00:00 UTC); needs to"`
-	To         string `json:"to,omitempty" jsonschema:"end of the run creation range, ISO 8601 timestamp or YYYY-MM-DD (23:59:59.999 UTC); needs from"`
+	From       string `json:"from,omitempty" jsonschema:"start of the run creation range, ISO 8601 timestamp or YYYY-MM-DD (00:00 UTC); must be sent with to"`
+	To         string `json:"to,omitempty" jsonschema:"end of the run creation range, ISO 8601 timestamp or YYYY-MM-DD (23:59:59.999 UTC); must be sent with from"`
 	Version    string `json:"version,omitempty" jsonschema:"workflow version of the run; 0 is the draft used for test runs"`
 }
 
