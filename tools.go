@@ -21,7 +21,7 @@ const (
 )
 
 // serverVersion is overridden at release time via -ldflags "-X main.serverVersion=…".
-var serverVersion = "0.4.1"
+var serverVersion = "0.4.0"
 
 var (
 	actionFieldTypes  = []string{"TEXT", "MULTI_LINE_TEXT", "NUMBER", "BOOLEAN", "SELECT", "PASSWORD", "VECTOR", "OBJECT", "FILE", "ID"}
