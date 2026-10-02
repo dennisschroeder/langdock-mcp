@@ -72,6 +72,18 @@ The API cannot create or delete knowledge bases; both are only possible in the L
 
 `grant_knowledge_access` is all-or-nothing: if one target id is unknown or ineligible, nothing is granted. Groups can only be shared in the Langdock UI, and the owner's access cannot be changed or revoked.
 
+## User management tools
+
+These tools use the [User Management API](https://docs.langdock.com/en/developer/user-management-api/user-management-overview) and need a key with the `USER_MANAGEMENT_API` scope.
+
+| Tool | Endpoint |
+|---|---|
+| `invite_users` | `POST /user-management/v1/invite` |
+| `update_user_role` | `POST /user-management/v1/update-user-role` |
+| `deactivate_user` | `POST /user-management/v1/deactivate-user` |
+
+`invite_users` sends an invitation email to every new address and approves pending join requests from them. Existing members are skipped, and a 200 response can still list rejected addresses in `invalidEmails`. Roles are `member`, `editor` and `admin`; the API refuses to demote the last active admin. `deactivate_user` revokes access immediately but keeps the user's data for a later re-invite; the API cannot reactivate users.
+
 ## Configuration
 
 | Variable | Required | Description |

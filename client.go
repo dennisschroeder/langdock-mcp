@@ -56,6 +56,7 @@ const (
 	integrationsAPI apiFamily = iota
 	agentsAPI
 	knowledgeAPI
+	usersAPI
 )
 
 // familyOf classifies a request path relative to the base URL.
@@ -66,6 +67,8 @@ func familyOf(path string) apiFamily {
 		return agentsAPI
 	case p == "/knowledge" || strings.HasPrefix(p, "/knowledge/"):
 		return knowledgeAPI
+	case strings.HasPrefix(p, "/user-management/"):
+		return usersAPI
 	}
 	return integrationsAPI
 }
@@ -78,6 +81,8 @@ func (e *APIError) Error() string {
 		hint = agentStatusHint(e.Status)
 	case knowledgeAPI:
 		hint = knowledgeStatusHint(e.Status)
+	case usersAPI:
+		hint = userStatusHint(e.Status)
 	}
 	if hint != "" {
 		msg += " (" + hint + ")"
@@ -152,7 +157,23 @@ func knowledgeStatusHint(status int) string {
 	return ""
 }
 
-var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key with the INTEGRATION_API scope (integration tools), the Agent API scope (agent tools) and the KNOWLEDGE_FOLDER_API scope (knowledge tools) in the MCP server's environment")
+// userStatusHint covers the User Management API, whose keys must be created
+// by a workspace admin.
+func userStatusHint(status int) string {
+	switch status {
+	case http.StatusBadRequest:
+		return "invalid request body or role, or the change would leave the workspace without an active admin"
+	case http.StatusUnauthorized:
+		return "invalid, missing or expired API key, or the key was not created by a workspace admin with the USER_MANAGEMENT_API scope"
+	case http.StatusForbidden:
+		return "API key lacks the USER_MANAGEMENT_API scope"
+	case http.StatusNotFound:
+		return "no active human workspace member with this email"
+	}
+	return ""
+}
+
+var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key with the INTEGRATION_API scope (integration tools), the Agent API scope (agent tools) the KNOWLEDGE_FOLDER_API scope (knowledge tools) and the USER_MANAGEMENT_API scope (user tools) in the MCP server's environment")
 
 // doJSON sends body (if non-nil) as JSON and returns the raw response body.
 func (c *Client) doJSON(ctx context.Context, method, path string, body any) ([]byte, error) {

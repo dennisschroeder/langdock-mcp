@@ -25,9 +25,10 @@ Handlers return Langdock's JSON response verbatim as text. A returned Go error b
 - `update_agent` must stay a plain pass-through PATCH, not a read-merge-write. The API already leaves omitted fields unchanged, and `get_agent` returns the published version, so merging from it would overwrite unpublished draft changes. `get_agent` also omits `slug`, `options`, `fileTypes` and `emailDomain` of input fields, so they cannot be round-tripped.
 - `add_agent_actions` / `remove_agent_actions` are read-merge-writes over the published action list and say so in their descriptions. They keep action entries as raw JSON so undocumented properties such as `connectionId` survive; null values are dropped before resending.
 - Multipart uploads (knowledge files and the integration icon) go through a separate `http.Client` with a 10-minute timeout, because knowledge files may be up to 256 MB. Their MIME type comes from the explicit extension map `knowledgeMIMETypes`, because content sniffing reports Office files as `application/zip`, which Langdock rejects.
+- `invite_users` sends emails and `update_user_role` / `deactivate_user` change access, so their descriptions must keep stating those side effects. The role enum is lowercase because the API rejects other casing.
 - Never log or echo the API key.
 - `serverVersion` is a `var` because GoReleaser sets it from the tag via `-ldflags -X main.serverVersion=…`. Keep its default in step with the latest tag.
-- Endpoint paths, methods and field limits come from https://docs.langdock.com/en/developer/integrations-api/, https://docs.langdock.com/en/developer/agents-api/ and https://docs.langdock.com/en/developer/knowledge-folder-api/ (index at https://docs.langdock.com/llms.txt). Re-check there before changing them.
+- Endpoint paths, methods and field limits come from https://docs.langdock.com/en/developer/integrations-api/, https://docs.langdock.com/en/developer/agents-api/ https://docs.langdock.com/en/developer/knowledge-folder-api/ and https://docs.langdock.com/en/developer/user-management-api/ (index at https://docs.langdock.com/llms.txt). Re-check there before changing them.
 
 ## Gotchas
 
