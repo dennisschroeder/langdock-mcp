@@ -85,3 +85,19 @@ func (s *Server) updateUserRole(ctx context.Context, _ *mcp.CallToolRequest, in 
 func (s *Server) deactivateUser(ctx context.Context, _ *mcp.CallToolRequest, in DeactivateUserInput) (*mcp.CallToolResult, any, error) {
 	return s.call(ctx, http.MethodPost, "/user-management/v1/deactivate-user", in)
 }
+
+// userStatusHint covers the User Management API, whose keys must be created
+// by a workspace admin.
+func userStatusHint(status int) string {
+	switch status {
+	case http.StatusBadRequest:
+		return "invalid request body or role, or the change would leave the workspace without an active admin"
+	case http.StatusUnauthorized:
+		return "invalid, missing or expired API key, or the admin who created the key no longer exists"
+	case http.StatusForbidden:
+		return "API key lacks the USER_MANAGEMENT_API scope"
+	case http.StatusNotFound:
+		return "no active human workspace member with this email"
+	}
+	return ""
+}
