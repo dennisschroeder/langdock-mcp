@@ -59,25 +59,31 @@ The key is checked lazily. A missing key produces a tool error on the first call
 
 ## Installation
 
-From a clone of this repository (it is private, so `go install …@latest` requires `GOPRIVATE` and Git credentials):
+Homebrew (macOS and Linux):
 
 ```bash
-go install .
+brew install --cask dennisschroeder/langdock-mcp/langdock-mcp
+```
+
+With Go:
+
+```bash
+go install github.com/dennisschroeder/langdock-mcp@latest
 ```
 
 Claude Code:
 
 ```bash
-claude mcp add langdock-integrations -s user -e LANGDOCK_API_KEY=<key> -- "$(go env GOPATH)/bin/langdock-mcp"
+claude mcp add langdock-integrations -s user -e LANGDOCK_API_KEY=<key> -- langdock-mcp
 ```
 
-Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json`) does not inherit the shell `PATH`, so it needs the absolute path (`$(go env GOPATH)/bin/langdock-mcp` for a Go install):
 
 ```json
 {
   "mcpServers": {
     "langdock-integrations": {
-      "command": "/Users/<you>/go/bin/langdock-mcp",
+      "command": "/opt/homebrew/bin/langdock-mcp",
       "env": { "LANGDOCK_API_KEY": "<key>" }
     }
   }
@@ -95,5 +101,7 @@ gofmt -l .
 go vet ./...
 go test ./...
 ```
+
+Pushing a `v*` tag runs GoReleaser, which publishes the release binaries and updates the cask in [dennisschroeder/homebrew-langdock-mcp](https://github.com/dennisschroeder/homebrew-langdock-mcp). The workflow needs a `HOMEBREW_TAP_GITHUB_TOKEN` secret with write access to the tap. The tag sets the version reported by `--version` and to MCP clients.
 
 Tests run the real SDK client against the server over in-memory transports, with an `httptest` server standing in for Langdock.

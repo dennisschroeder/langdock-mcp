@@ -16,10 +16,12 @@ import (
 )
 
 const (
-	serverName    = "langdock-mcp"
-	serverVersion = "0.2.0"
-	maxIconBytes  = 20 << 20
+	serverName   = "langdock-mcp"
+	maxIconBytes = 20 << 20
 )
+
+// serverVersion is overridden at release time via -ldflags "-X main.serverVersion=…".
+var serverVersion = "0.2.0"
 
 var (
 	actionFieldTypes  = []string{"TEXT", "MULTI_LINE_TEXT", "NUMBER", "BOOLEAN", "SELECT", "PASSWORD", "VECTOR", "OBJECT", "FILE", "ID"}

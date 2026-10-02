@@ -25,6 +25,7 @@ Handlers return Langdock's JSON response verbatim as text. A returned Go error b
 - `update_agent` must stay a plain pass-through PATCH, not a read-merge-write. The API already leaves omitted fields unchanged, and `get_agent` returns the published version, so merging from it would overwrite unpublished draft changes. `get_agent` also omits `slug`, `options`, `fileTypes` and `emailDomain` of input fields, so they cannot be round-tripped.
 - `add_agent_actions` / `remove_agent_actions` are read-merge-writes over the published action list and say so in their descriptions. They keep action entries as raw JSON so undocumented properties such as `connectionId` survive; null values are dropped before resending.
 - Never log or echo the API key.
+- `serverVersion` is a `var` because GoReleaser sets it from the tag via `-ldflags -X main.serverVersion=…`. Keep its default in step with the latest tag.
 - Endpoint paths, methods and field limits come from https://docs.langdock.com/en/developer/integrations-api/ and https://docs.langdock.com/en/developer/agents-api/ (index at https://docs.langdock.com/llms.txt). Re-check there before changing them.
 
 ## Gotchas
