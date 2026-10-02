@@ -23,11 +23,13 @@ Handlers return Langdock's JSON response verbatim as text. A returned Go error b
 - `update_action` must stay a read-merge-write. The API's PUT clears `description` and drops all input fields that are not resent, which would silently destroy an action when a caller only changes its code. `code` and `requiresConfirmation` are preserved by the API when omitted, so they are only sent when given. `jsonSchema` on input fields is not returned by `get_integration` but is preserved server-side when the field slug (derived from its label) is unchanged.
 - `update_trigger` is a full replace and says so in its description. `get_integration` returns no `pollingCode` or trigger input fields, so a merge is impossible.
 - `update_agent` must stay a plain pass-through PATCH, not a read-merge-write. The API already leaves omitted fields unchanged, and `get_agent` returns the published version, so merging from it would overwrite unpublished draft changes. `get_agent` also omits `slug`, `options`, `fileTypes` and `emailDomain` of input fields, so they cannot be round-tripped.
+- `update_scheduled_task` must stay a plain pass-through PATCH. The API leaves omitted fields unchanged and validates the schedule after merging with the stored clock, so a read-merge-write would add nothing. `clearAssistantId` / `clearTaggedAssistantId` send an explicit `null`.
 - `add_agent_actions` / `remove_agent_actions` are read-merge-writes over the published action list and say so in their descriptions. They keep action entries as raw JSON so undocumented properties such as `connectionId` survive; null values are dropped before resending.
 - Multipart uploads (knowledge files and the integration icon) go through a separate `http.Client` with a 10-minute timeout, because knowledge files may be up to 256 MB. Their MIME type comes from the explicit extension map `knowledgeMIMETypes`, because content sniffing reports Office files as `application/zip`, which Langdock rejects.
 - Never log or echo the API key.
 - `serverVersion` is a `var` because GoReleaser sets it from the tag via `-ldflags -X main.serverVersion=…`. Keep its default in step with the latest tag.
 - Endpoint paths, methods and field limits come from https://docs.langdock.com/en/developer/integrations-api/, https://docs.langdock.com/en/developer/agents-api/ and https://docs.langdock.com/en/developer/knowledge-folder-api/ (index at https://docs.langdock.com/llms.txt). Re-check there before changing them.
+- Scheduled Tasks endpoints (`/automations/v1`, its own `APIError` family) come from https://docs.langdock.com/en/developer/scheduled-tasks-api/.
 
 ## Gotchas
 

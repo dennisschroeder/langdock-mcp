@@ -72,6 +72,23 @@ The API cannot create or delete knowledge bases; both are only possible in the L
 
 `grant_knowledge_access` is all-or-nothing: if one target id is unknown or ineligible, nothing is granted. Groups can only be shared in the Langdock UI, and the owner's access cannot be changed or revoked.
 
+## Scheduled task tools
+
+| Tool | Endpoint |
+|---|---|
+| `list_scheduled_tasks` | `GET /automations/v1` |
+| `create_scheduled_task` | `POST /automations/v1` |
+| `get_scheduled_task` | `GET /automations/v1/{automationId}` |
+| `update_scheduled_task` | `PATCH /automations/v1/{automationId}` |
+| `delete_scheduled_task` | `DELETE /automations/v1/{automationId}` |
+| `pause_scheduled_task` | `POST /automations/v1/{automationId}/pause` |
+| `resume_scheduled_task` | `POST /automations/v1/{automationId}/resume` |
+| `run_scheduled_task` | `POST /automations/v1/{automationId}/run` |
+
+These tools need a workspace API key of a service account with the `AUTOMATION_API` scope (labelled Scheduled Tasks API), and Scheduled Tasks must be enabled for that account. Personal API keys are rejected. The key only sees and changes the tasks it created, at most 10 per owner.
+
+`update_scheduled_task` sends only the fields the caller passes, and the API keeps everything else. The schedule is validated after merging with the stored clock fields. Passed arrays replace the stored list. `clearAssistantId` and `clearTaggedAssistantId` remove the agents. `run_scheduled_task` only enqueues a run and returns its `runId`; it also works on paused and `MANUAL` tasks and does not resume them.
+
 ## Configuration
 
 | Variable | Required | Description |
