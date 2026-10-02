@@ -3,7 +3,7 @@
 An MCP server that exposes these Langdock APIs as tools, so that an MCP client such as Claude Code or Claude Desktop can build and administer a Langdock workspace:
 
 - [Integrations API](https://docs.langdock.com/en/developer/integrations-api/integrations-overview): custom integrations with their actions, triggers, auth configuration and icon
-- [Agents API](https://docs.langdock.com/en/developer/agents-api/agents-overview) (build endpoints, disable, chat completions and attachments): agents
+- [Agents API](https://docs.langdock.com/en/developer/agents-api/agents-overview): building, publishing, disabling and chatting with agents, and attachments
 - [Audit Logs API](https://docs.langdock.com/en/developer/audit-logs-api/intro-to-audit-logs-api): the workspace audit log (read-only)
 - [Knowledge Folder API](https://docs.langdock.com/en/developer/knowledge-folder-api/knowledge-folder-overview): files and sharing of knowledge bases
 - [Prompt Library API](https://docs.langdock.com/en/developer/prompts-api/prompts-overview): prompts and prompt folders
@@ -64,6 +64,14 @@ The API offers no endpoint to delete an integration.
 
 `disable_agent` disables an agent (`disabled: true`) or enables it again (`disabled: false`) and needs admin rights. `chat_with_agent` sends a conversation in Vercel AI SDK `UIMessage` format to an agent shared with the key and returns its reply; the API keeps no conversation state, so follow-ups resend the earlier turns. The reply returns each assistant message with a `content` string; a follow-up adds it as `{role: "assistant", parts: [{type: "text", text: content}]}`. Parts are open maps, so reasoning, tool and source parts from streaming clients can be resent unchanged too. Message ids are generated when omitted, `output` requests structured output, and `imageResponseFormat: url` keeps generated images within the 10 MB response limit. The agent runs its actions, so a chat can change connected systems. Langdock aborts non-streaming completions after 100 seconds with a 524. `upload_attachment` reads a local file and returns an `attachmentId` for a message's `metadata.attachments` or an agent's `attachments`; `delete_attachment` deletes it; it can no longer be referenced and cannot be restored through the API. Both attachment tools need the `KNOWLEDGE_FOLDER_API` scope.
 
+## Audit log tools
+
+| Tool | Endpoint |
+|---|---|
+| `list_audit_logs` | `GET /audit-logs/{workspace_id}` |
+
+`list_audit_logs` needs an API key with the `AUDIT_LOG_API` scope, which only workspace admins can create, and `workspace_id` must be the key's own workspace. Its inputs keep the API's snake_case query names (`entity_type`, `actor_id`). Pages hold at most 50 entries; pass `next_cursor` as `cursor` until it is null. Entries are retained for 90 days.
+
 ## Knowledge tools
 
 | Tool | Endpoint |
@@ -105,6 +113,23 @@ The API cannot create or delete knowledge bases; both are only possible in the L
 
 The Prompt Library API acts with the permissions of the API key's owner. `update_prompt` and `update_prompt_folder` send only the fields the caller passes, which the API applies as a partial update. `clearPromptFolderId` takes a prompt out of its folder and `clearSharedWithGroupId` stops sharing a folder with its group. A prompt cannot be in a folder and shared with the workspace at the same time, and a folder cannot be shared with the workspace and a group at the same time. `delete_prompt_folder` also deletes every prompt in the folder.
 
+## Scheduled task tools
+
+| Tool | Endpoint |
+|---|---|
+| `list_scheduled_tasks` | `GET /automations/v1` |
+| `create_scheduled_task` | `POST /automations/v1` |
+| `get_scheduled_task` | `GET /automations/v1/{automationId}` |
+| `update_scheduled_task` | `PATCH /automations/v1/{automationId}` |
+| `delete_scheduled_task` | `DELETE /automations/v1/{automationId}` |
+| `pause_scheduled_task` | `POST /automations/v1/{automationId}/pause` |
+| `resume_scheduled_task` | `POST /automations/v1/{automationId}/resume` |
+| `run_scheduled_task` | `POST /automations/v1/{automationId}/run` |
+
+These tools need a workspace API key of a service account with the `AUTOMATION_API` scope (labelled Scheduled Tasks API), and Scheduled Tasks must be enabled for that account. Personal API keys are rejected. The key only sees and changes the tasks it created, at most 10 per owner.
+
+`update_scheduled_task` sends only the fields the caller passes, and the API keeps everything else. The schedule is validated after merging with the stored clock fields. Passed arrays replace the stored list. `clearAssistantId` and `clearTaggedAssistantId` remove the agents. `run_scheduled_task` only enqueues a run and returns its `runId`; it also works on paused and `MANUAL` tasks and does not resume them.
+
 ## Usage export tools
 
 | Tool | Endpoint |
@@ -144,31 +169,6 @@ A workflow has a draft graph (`nodes` and `edges`, version `0`) and, once publis
 
 `list_workflow_runs` pages with a cursor and filters by run, mode, status, version and date range. `export_workflow_runs` returns flat rows per node execution for a required date range, is not paginated and fails above 10,000 runs or 8,000,000 payload bytes.
 
-## Scheduled task tools
-
-| Tool | Endpoint |
-|---|---|
-| `list_scheduled_tasks` | `GET /automations/v1` |
-| `create_scheduled_task` | `POST /automations/v1` |
-| `get_scheduled_task` | `GET /automations/v1/{automationId}` |
-| `update_scheduled_task` | `PATCH /automations/v1/{automationId}` |
-| `delete_scheduled_task` | `DELETE /automations/v1/{automationId}` |
-| `pause_scheduled_task` | `POST /automations/v1/{automationId}/pause` |
-| `resume_scheduled_task` | `POST /automations/v1/{automationId}/resume` |
-| `run_scheduled_task` | `POST /automations/v1/{automationId}/run` |
-
-These tools need a workspace API key of a service account with the `AUTOMATION_API` scope (labelled Scheduled Tasks API), and Scheduled Tasks must be enabled for that account. Personal API keys are rejected. The key only sees and changes the tasks it created, at most 10 per owner.
-
-`update_scheduled_task` sends only the fields the caller passes, and the API keeps everything else. The schedule is validated after merging with the stored clock fields. Passed arrays replace the stored list. `clearAssistantId` and `clearTaggedAssistantId` remove the agents. `run_scheduled_task` only enqueues a run and returns its `runId`; it also works on paused and `MANUAL` tasks and does not resume them.
-
-## Audit log tools
-
-| Tool | Endpoint |
-|---|---|
-| `list_audit_logs` | `GET /audit-logs/{workspace_id}` |
-
-`list_audit_logs` needs an API key with the `AUDIT_LOG_API` scope, which only workspace admins can create, and `workspace_id` must be the key's own workspace. Its inputs keep the API's snake_case query names (`entity_type`, `actor_id`). Pages hold at most 50 entries; pass `next_cursor` as `cursor` until it is null. Entries are retained for 90 days.
-
 ## Configuration
 
 | Variable | Required | Description |
@@ -182,8 +182,8 @@ Each tool family needs its own scope on the key:
 |---|---|
 | Integration tools | `INTEGRATION_API` |
 | Agent tools | Agent API scope, plus access to the agent |
-| `list_audit_logs` | `AUDIT_LOG_API` |
 | Attachment tools | `KNOWLEDGE_FOLDER_API` |
+| `list_audit_logs` | `AUDIT_LOG_API` |
 | Knowledge tools | `KNOWLEDGE_FOLDER_API`, plus access to the knowledge base |
 | Prompt tools | `PROMPT_API` |
 | Scheduled task tools | `AUTOMATION_API` (labelled Scheduled Tasks API), on a service-account workspace key |
@@ -194,11 +194,14 @@ Each tool family needs its own scope on the key:
 The key is checked lazily.
 A missing key produces a tool error on the first call, not a startup failure.
 A 401 or 403 from an agent tool says that the key may lack the Agent API scope.
+A 403 from an attachment tool says that the key may lack the `KNOWLEDGE_FOLDER_API` scope or has no access to the attachment.
+A 403 from `list_audit_logs` says that the key may lack the `AUDIT_LOG_API` scope or that `workspace_id` is not the key's workspace.
 A 403 from a knowledge tool says that the key may lack the `KNOWLEDGE_FOLDER_API` scope, the knowledge base may not be shared with it, or the write may need the Editor role.
+A 403 from a prompt tool says that the key may lack the `PROMPT_API` scope, or that its owner lacks write access or the `sharePrompts` permission.
+A 403 from a scheduled task tool says that the key may lack the `AUTOMATION_API` scope, may be a personal key, or that Scheduled Tasks are not available to its service account.
+A 401 or 403 from `export_usage` says that the key may lack the `USAGE_EXPORT_API` scope.
 A 403 from a user management tool says that the key may lack the `USER_MANAGEMENT_API` scope.
 A 403 from a workflow tool names the workflow scope the call needs, and for update, publish and run listing it can also mean that the workflow does not exist.
-A 403 from a prompt tool says that the key may lack the `PROMPT_API` scope, or that its owner lacks write access or the `sharePrompts` permission.
-A 403 from `list_audit_logs` says that the key may lack the `AUDIT_LOG_API` scope or that `workspace_id` is not the key's workspace.
 
 ## Installation
 
@@ -217,7 +220,7 @@ go install github.com/dennisschroeder/langdock-mcp@latest
 Claude Code:
 
 ```bash
-claude mcp add langdock-integrations -s user -e LANGDOCK_API_KEY=<key> -- langdock-mcp
+claude mcp add langdock -s user -e LANGDOCK_API_KEY=<key> -- langdock-mcp
 ```
 
 Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json`) does not inherit the shell `PATH`, so it needs the absolute path (`$(go env GOPATH)/bin/langdock-mcp` for a Go install):
@@ -225,7 +228,7 @@ Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json
 ```json
 {
   "mcpServers": {
-    "langdock-integrations": {
+    "langdock": {
       "command": "/opt/homebrew/bin/langdock-mcp",
       "env": { "LANGDOCK_API_KEY": "<key>" }
     }

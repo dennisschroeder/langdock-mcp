@@ -32,7 +32,7 @@ homebrew_casks:
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     directory: Casks
     homepage: https://github.com/dennisschroeder/langdock-mcp
-    description: MCP server for the Langdock Integrations and Agents APIs
+    description: MCP server for Langdock's public APIs
     license: MIT
     # The binary is not notarized, so Gatekeeper would refuse to run it.
     hooks:

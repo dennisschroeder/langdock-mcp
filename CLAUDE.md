@@ -61,6 +61,7 @@ Handlers return Langdock's JSON response verbatim as text. A returned Go error b
 
 ## Gotchas
 
+- GoReleaser writes the cask's quarantine hook as `postflight`, which Homebrew 7 deprecates (a warning until 2027-12-11, an error afterwards). Switch `hooks.post.install` to the `postflight_steps` form once GoReleaser v2.19 ships it (https://github.com/goreleaser/goreleaser/issues/6870).
 - MCP `2026-07-28` removed the `initialize` handshake in favour of the stateless `server/discover`. A hand-written stdio smoke test that sends `initialize` therefore always negotiates `2025-11-25`, which is correct SDK behaviour. `TestNegotiatesLatestProtocol` covers the new path with the SDK client.
 - The stdio smoke test needs a trailing `sleep`, or the transport sees EOF and exits before responding:
 
