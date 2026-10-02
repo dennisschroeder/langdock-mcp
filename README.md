@@ -62,7 +62,7 @@ The key is checked lazily. A missing key produces a tool error on the first call
 Homebrew (macOS and Linux):
 
 ```bash
-brew install --cask dennisschroeder/langdock-mcp/langdock-mcp
+brew install --cask dennisschroeder/tap/langdock-mcp
 ```
 
 With Go:
@@ -102,6 +102,6 @@ go vet ./...
 go test ./...
 ```
 
-Pushing a `v*` tag runs GoReleaser, which publishes the release binaries and updates the cask in [dennisschroeder/homebrew-langdock-mcp](https://github.com/dennisschroeder/homebrew-langdock-mcp). The workflow needs a `HOMEBREW_TAP_GITHUB_TOKEN` secret with write access to the tap. The tag sets the version reported by `--version` and to MCP clients.
+Pushing a `v*` tag runs GoReleaser, which publishes the release binaries and updates the cask in [dennisschroeder/homebrew-tap](https://github.com/dennisschroeder/homebrew-tap). The workflow needs a `HOMEBREW_TAP_GITHUB_TOKEN` secret with write access to the tap. The tag sets the version reported by `--version` and to MCP clients.
 
 Tests run the real SDK client against the server over in-memory transports, with an `httptest` server standing in for Langdock.
