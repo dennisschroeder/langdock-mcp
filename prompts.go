@@ -12,7 +12,8 @@ import (
 )
 
 // uuidPattern guards path ids, because a non-UUID id such as "folders" or ""
-// silently addresses a different route under /prompts/v1.
+// silently addresses a different route under /prompts/v1. Body ids get it too,
+// so a malformed one fails before the request instead of with a 400.
 const uuidPattern = `^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`
 
 type ListPromptsInput struct {
@@ -145,7 +146,7 @@ func (s *Server) registerPrompts() {
 }
 
 func uuidIDs(sc *jsonschema.Schema) {
-	for _, p := range []string{"promptId", "folderId"} {
+	for _, p := range []string{"promptId", "folderId", "promptFolderId", "sharedWithGroupId"} {
 		if prop, ok := sc.Properties[p]; ok {
 			prop.Pattern = uuidPattern
 		}
@@ -174,6 +175,7 @@ func nonNull(sc *jsonschema.Schema, props ...string) {
 }
 
 func listSchema(sc *jsonschema.Schema) {
+	nonNull(sc, "sharedWithWorkspace")
 	at(sc, "limit").Minimum = ptr(1.0)
 	at(sc, "limit").Maximum = ptr(250.0)
 }
@@ -288,13 +290,6 @@ func listQuery(limit int, cursor, query string, shared *bool) url.Values {
 		q.Set("sharedWithWorkspace", strconv.FormatBool(*shared))
 	}
 	return q
-}
-
-func withQuery(path string, q url.Values) string {
-	if len(q) == 0 {
-		return path
-	}
-	return path + "?" + q.Encode()
 }
 
 func promptPath(id string) string {

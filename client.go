@@ -57,6 +57,10 @@ const (
 	agentsAPI
 	knowledgeAPI
 	promptsAPI
+	usageAPI
+	usersAPI
+	workflowsAPI
+	workflowExportAPI
 )
 
 // familyOf classifies a request path relative to the base URL.
@@ -69,6 +73,14 @@ func familyOf(path string) apiFamily {
 		return knowledgeAPI
 	case p == "/prompts/v1" || strings.HasPrefix(p, "/prompts/v1/"):
 		return promptsAPI
+	case strings.HasPrefix(p, "/export/"):
+		return usageAPI
+	case strings.HasPrefix(p, "/user-management/"):
+		return usersAPI
+	case strings.HasPrefix(p, "/workflows/v1/"):
+		return workflowsAPI
+	case strings.HasPrefix(p, "/workflows/"):
+		return workflowExportAPI
 	}
 	return integrationsAPI
 }
@@ -83,6 +95,14 @@ func (e *APIError) Error() string {
 		hint = knowledgeStatusHint(e.Status)
 	case promptsAPI:
 		hint = promptStatusHint(e.Status)
+	case usageAPI:
+		hint = usageStatusHint(e.Status)
+	case usersAPI:
+		hint = userStatusHint(e.Status)
+	case workflowsAPI:
+		hint = workflowStatusHint(e.Status)
+	case workflowExportAPI:
+		hint = workflowExportStatusHint(e.Status)
 	}
 	if hint != "" {
 		msg += " (" + hint + ")"
@@ -157,7 +177,15 @@ func knowledgeStatusHint(status int) string {
 	return ""
 }
 
-var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key with the INTEGRATION_API scope (integration tools), the Agent API scope (agent tools), the KNOWLEDGE_FOLDER_API scope (knowledge tools) and the PROMPT_API scope (prompt tools) in the MCP server's environment")
+var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key in the MCP server's environment with the scope each tool family needs: " + strings.Join([]string{
+	"INTEGRATION_API (integration tools)",
+	"the Agent API scope (agent tools)",
+	"KNOWLEDGE_FOLDER_API (knowledge tools)",
+	"PROMPT_API (prompt tools)",
+	"USAGE_EXPORT_API (export_usage)",
+	"USER_MANAGEMENT_API (user tools)",
+	"WORKFLOW_API, WORKFLOW_WRITE_API and WORKFLOW_DELETE_API (workflow tools)",
+}, ", "))
 
 // doJSON sends body (if non-nil) as JSON and returns the raw response body.
 func (c *Client) doJSON(ctx context.Context, method, path string, body any) ([]byte, error) {
@@ -226,15 +254,23 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body io.Re
 	return req, nil
 }
 
+const maxResponseSize = 10 << 20
+
+var errResponseTooLarge = fmt.Errorf("Langdock response exceeds %d MB", maxResponseSize>>20)
+
 func (c *Client) send(hc *http.Client, req *http.Request, api apiFamily) ([]byte, error) {
 	resp, err := hc.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize+1))
 	if err != nil {
 		return nil, err
+	}
+	// A cut-off body would reach the model as silently broken JSON.
+	if len(body) > maxResponseSize {
+		return nil, errResponseTooLarge
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return nil, &APIError{Status: resp.StatusCode, Body: strings.TrimSpace(string(body)), API: api}

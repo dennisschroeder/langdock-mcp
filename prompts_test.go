@@ -103,6 +103,10 @@ func TestPromptSchemaRejectsInvalidInput(t *testing.T) {
 		{"update_prompt_folder", map[string]any{"folderId": testPromptFolderID, "name": "x"}},
 		{"update_prompt", map[string]any{"promptId": testPromptID, "title": "New", "promptFolderId": nil}},
 		{"update_prompt_folder", map[string]any{"folderId": testPromptFolderID, "sharedWithWorkspace": true, "sharedWithGroupId": nil}},
+		{"update_prompt", map[string]any{"promptId": testPromptID, "promptFolderId": ""}},
+		{"update_prompt_folder", map[string]any{"folderId": testPromptFolderID, "sharedWithGroupId": "group"}},
+		{"list_prompts", map[string]any{"sharedWithWorkspace": nil}},
+		{"list_prompt_folders", map[string]any{"sharedWithWorkspace": nil}},
 	}
 	for _, c := range cases {
 		t.Run(c.tool, func(t *testing.T) {
