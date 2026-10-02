@@ -18,6 +18,7 @@ Single package: `main.go` (wiring from env) → `client.go` (`Client`, a thin HT
 
 - `agents.go`: Agents API
 - `knowledge.go`: Knowledge Folder API
+- `prompts.go`: Prompt Library API
 - `usage.go`: Usage Export API
 - `users.go`: User Management API
 - `workflows.go`: Workflow API and Workflow Run Export API
@@ -32,6 +33,8 @@ Handlers return Langdock's JSON response verbatim as text. A returned Go error b
 - `update_trigger` is a full replace and says so in its description. `get_integration` returns no `pollingCode` or trigger input fields, so a merge is impossible.
 - `update_agent` must stay a plain pass-through PATCH, not a read-merge-write. The API already leaves omitted fields unchanged, and `get_agent` returns the published version, so merging from it would overwrite unpublished draft changes. `get_agent` also omits `slug`, `options`, `fileTypes` and `emailDomain` of input fields, so they cannot be round-tripped.
 - `add_agent_actions` / `remove_agent_actions` are read-merge-writes over the published action list and say so in their descriptions. They keep action entries as raw JSON so undocumented properties such as `connectionId` survive; null values are dropped before resending.
+- `update_prompt` and `update_prompt_folder` must stay plain pass-through PATCHes. The API leaves omitted fields unchanged, so a read-merge-write would add nothing. `promptFolderId` and `sharedWithGroupId` are cleared with an explicit null, sent via the `clearPromptFolderId` / `clearSharedWithGroupId` flags.
+- Prompt and prompt folder path ids are validated as UUIDs, because a non-UUID id such as `folders` addresses a different route under `/prompts/v1`.
 - `update_workflow` must stay a plain pass-through PATCH. The docs state that omitted `limits` fields stay unchanged and treat the endpoint as a partial update (a body with no fields is a 400), so omitted metadata is assumed unchanged too; graph writes only touch the draft graph (version `0`), never `activeVersion`. `nodes` and `edges` replace the whole draft, so both are required together. The API rejects metadata and graph changes in one request, and the tool rejects them locally rather than splitting them into two non-atomic writes. Removing a limit needs an explicit `null`, which `removeLimits` sends.
 - `delete_workflow` is permanent and has no confirmation parameter; its description must keep saying so.
 - Multipart uploads (knowledge files and the integration icon) go through a separate `http.Client` with a 10-minute timeout, because knowledge files may be up to 256 MB. Their MIME type comes from the explicit extension map `knowledgeMIMETypes`, because content sniffing reports Office files as `application/zip`, which Langdock rejects.
@@ -41,7 +44,12 @@ Handlers return Langdock's JSON response verbatim as text. A returned Go error b
 - `invite_users` sends emails and `update_user_role` / `deactivate_user` change access, so their descriptions must keep stating those side effects. The role enum is lowercase because the API rejects other casing.
 - Never log or echo the API key.
 - `serverVersion` is a `var` because GoReleaser sets it from the tag via `-ldflags -X main.serverVersion=…`. Keep its default in step with the latest tag.
-- Endpoint paths, methods and field limits come from https://docs.langdock.com/en/developer/integrations-api/, https://docs.langdock.com/en/developer/agents-api/, https://docs.langdock.com/en/developer/knowledge-folder-api/ and https://docs.langdock.com/en/developer/user-management-api/ (index at https://docs.langdock.com/llms.txt). Re-check there before changing them.
+- Endpoint paths, methods and field limits come from the Langdock docs (index at https://docs.langdock.com/llms.txt). Re-check there before changing them:
+  - Integrations API: https://docs.langdock.com/en/developer/integrations-api/
+  - Agents API: https://docs.langdock.com/en/developer/agents-api/
+  - Knowledge Folder API: https://docs.langdock.com/en/developer/knowledge-folder-api/
+  - Prompt Library API: https://docs.langdock.com/en/developer/prompts-api/
+  - User Management API: https://docs.langdock.com/en/developer/user-management-api/
 - Workflow API endpoints come from https://docs.langdock.com/en/developer/workflow-api/workflows-overview.md and the Workflow Run Export API from https://docs.langdock.com/en/developer/workflow-api/intro-to-workflow-api.md. `familyOf` maps `/workflows/v1/` to the Workflow API hints and other `/workflows/` paths to the export hints.
 
 ## Gotchas

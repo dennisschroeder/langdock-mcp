@@ -1,6 +1,14 @@
 # langdock-mcp
 
-An MCP server that exposes Langdock's [Integrations API](https://docs.langdock.com/en/developer/integrations-api/integrations-overview), the build endpoints of the [Agents API](https://docs.langdock.com/en/developer/agents-api/agents-overview) and the [Knowledge Folder API](https://docs.langdock.com/en/developer/knowledge-folder-api/knowledge-folder-overview), and the [User Management API](https://docs.langdock.com/en/developer/user-management-api/user-management-overview) as tools. An MCP client such as Claude Code or Claude Desktop can use it to create and maintain custom Langdock integrations (actions, triggers, auth configuration, icon), agents, the files and sharing of knowledge bases, and workspace membership.
+An MCP server that exposes these Langdock APIs as tools, so that an MCP client such as Claude Code or Claude Desktop can build and administer a Langdock workspace:
+
+- [Integrations API](https://docs.langdock.com/en/developer/integrations-api/integrations-overview): custom integrations with their actions, triggers, auth configuration and icon
+- [Agents API](https://docs.langdock.com/en/developer/agents-api/agents-overview) (build endpoints): agents
+- [Knowledge Folder API](https://docs.langdock.com/en/developer/knowledge-folder-api/knowledge-folder-overview): files and sharing of knowledge bases
+- [Prompt Library API](https://docs.langdock.com/en/developer/prompts-api/prompts-overview): prompts and prompt folders
+- [Usage Export API](https://docs.langdock.com/en/developer/usage-export-api/intro-to-usage-export-api): workspace usage data
+- [User Management API](https://docs.langdock.com/en/developer/user-management-api/user-management-overview): workspace membership
+- [Workflow API](https://docs.langdock.com/en/developer/workflow-api/workflows-overview): workflows and their run history
 
 Langdock's own MCP server (`https://api.langdock.com/mcp`) only exposes workspace agents (`find_agent`, `ask_agent`). As of September 2026 there is no official MCP server for the Integrations API.
 
@@ -72,6 +80,23 @@ The API cannot create or delete knowledge bases; both are only possible in the L
 
 `grant_knowledge_access` is all-or-nothing: if one target id is unknown or ineligible, nothing is granted. Groups can only be shared in the Langdock UI, and the owner's access cannot be changed or revoked.
 
+## Prompt tools
+
+| Tool | Endpoint |
+|---|---|
+| `list_prompts` | `GET /prompts/v1` |
+| `create_prompt` | `POST /prompts/v1` |
+| `get_prompt` | `GET /prompts/v1/{promptId}` |
+| `update_prompt` | `PATCH /prompts/v1/{promptId}` |
+| `delete_prompt` | `DELETE /prompts/v1/{promptId}` |
+| `list_prompt_folders` | `GET /prompts/v1/folders` |
+| `create_prompt_folder` | `POST /prompts/v1/folders` |
+| `get_prompt_folder` | `GET /prompts/v1/folders/{folderId}` |
+| `update_prompt_folder` | `PATCH /prompts/v1/folders/{folderId}` |
+| `delete_prompt_folder` | `DELETE /prompts/v1/folders/{folderId}` |
+
+The Prompt Library API acts with the permissions of the API key's owner. `update_prompt` and `update_prompt_folder` send only the fields the caller passes, which the API applies as a partial update. `clearPromptFolderId` takes a prompt out of its folder and `clearSharedWithGroupId` stops sharing a folder with its group. A prompt cannot be in a folder and shared with the workspace at the same time, and a folder cannot be shared with the workspace and a group at the same time. `delete_prompt_folder` also deletes every prompt in the folder.
+
 ## Usage export tools
 
 | Tool | Endpoint |
@@ -125,6 +150,7 @@ Each tool family needs its own scope on the key:
 | Integration tools | `INTEGRATION_API` |
 | Agent tools | Agent API scope, plus access to the agent |
 | Knowledge tools | `KNOWLEDGE_FOLDER_API`, plus access to the knowledge base |
+| Prompt tools | `PROMPT_API` |
 | `export_usage` | `USAGE_EXPORT_API` |
 | User management tools | `USER_MANAGEMENT_API` |
 | Workflow tools | `WORKFLOW_API` to read, list runs and export, `WORKFLOW_WRITE_API` to create, update and publish, `WORKFLOW_DELETE_API` to delete, plus access to the workflow |
@@ -135,6 +161,7 @@ A 401 or 403 from an agent tool says that the key may lack the Agent API scope.
 A 403 from a knowledge tool says that the key may lack the `KNOWLEDGE_FOLDER_API` scope, the knowledge base may not be shared with it, or the write may need the Editor role.
 A 403 from a user management tool says that the key may lack the `USER_MANAGEMENT_API` scope.
 A 403 from a workflow tool names the workflow scope the call needs, and for update, publish and run listing it can also mean that the workflow does not exist.
+A 403 from a prompt tool says that the key may lack the `PROMPT_API` scope, or that its owner lacks write access or the `sharePrompts` permission.
 
 ## Installation
 

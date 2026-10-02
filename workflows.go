@@ -228,7 +228,7 @@ func (s *Server) listWorkflows(ctx context.Context, _ *mcp.CallToolRequest, in L
 	if in.Limit != 0 {
 		q.Set("limit", strconv.Itoa(in.Limit))
 	}
-	setIf(q, "cursor", in.Cursor)
+	setQuery(q, "cursor", in.Cursor)
 	return s.call(ctx, http.MethodGet, withQuery("/workflows/v1/list", q), nil)
 }
 
@@ -328,13 +328,13 @@ func (s *Server) listWorkflowRuns(ctx context.Context, _ *mcp.CallToolRequest, i
 	if in.Limit != 0 {
 		q.Set("limit", strconv.Itoa(in.Limit))
 	}
-	setIf(q, "cursor", in.Cursor)
-	setIf(q, "runId", in.RunID)
-	setIf(q, "runMode", in.RunMode)
-	setIf(q, "status", in.Status)
-	setIf(q, "from", in.From)
-	setIf(q, "to", in.To)
-	setIf(q, "version", in.Version)
+	setQuery(q, "cursor", in.Cursor)
+	setQuery(q, "runId", in.RunID)
+	setQuery(q, "runMode", in.RunMode)
+	setQuery(q, "status", in.Status)
+	setQuery(q, "from", in.From)
+	setQuery(q, "to", in.To)
+	setQuery(q, "version", in.Version)
 	return s.call(ctx, http.MethodGet, withQuery("/workflows/v1/runs", q), nil)
 }
 
@@ -345,7 +345,7 @@ func (s *Server) exportWorkflowRuns(ctx context.Context, _ *mcp.CallToolRequest,
 	return s.call(ctx, http.MethodGet, withQuery("/workflows/"+url.PathEscape(in.WorkflowID)+"/runs", q), nil)
 }
 
-func setIf(q url.Values, key, value string) {
+func setQuery(q url.Values, key, value string) {
 	if value != "" {
 		q.Set(key, value)
 	}
