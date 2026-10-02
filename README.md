@@ -72,11 +72,19 @@ The API cannot create or delete knowledge bases; both are only possible in the L
 
 `grant_knowledge_access` is all-or-nothing: if one target id is unknown or ineligible, nothing is granted. Groups can only be shared in the Langdock UI, and the owner's access cannot be changed or revoked.
 
+## Usage export tools
+
+| Tool | Endpoint |
+|---|---|
+| `export_usage` | `POST /export/{dataType}/json` or `/csv` (`dataType`: `users`, `agents`, `api-keys`, `projects`, `models`, `workflows`) |
+
+`export_usage` needs an API key with the `USAGE_EXPORT_API` scope, which only workspace admins can grant and which exposes usage data of the whole workspace. `format: json` (the default) returns the rows inline; `format: csv` returns a signed download URL, which suits exports beyond the server's 10 MB response limit. `group_by` accepts `model` for users, agents and API keys, `source` or `deployment` (BYOK only) for models, and nothing for projects and workflows. One request scans at most 1,000,000 usage rows, so long periods have to be split.
+
 ## Configuration
 
 | Variable | Required | Description |
 |---|---|---|
-| `LANGDOCK_API_KEY` | yes | API key created by a workspace admin in the Langdock workspace settings. Integration tools need the `INTEGRATION_API` scope, agent tools the Agent API scope and access to the agent, knowledge tools the `KNOWLEDGE_FOLDER_API` scope and access to the knowledge base. |
+| `LANGDOCK_API_KEY` | yes | API key created by a workspace admin in the Langdock workspace settings. Integration tools need the `INTEGRATION_API` scope, agent tools the Agent API scope and access to the agent, knowledge tools the `KNOWLEDGE_FOLDER_API` scope and access to the knowledge base, `export_usage` the `USAGE_EXPORT_API` scope. |
 | `LANGDOCK_BASE_URL` | no | Defaults to `https://api.langdock.com`. Dedicated deployments use `https://<your-domain>/api/public`. |
 
 The key is checked lazily. A missing key produces a tool error on the first call, not a startup failure. A 401 or 403 from an agent tool says that the key may lack the Agent API scope. A 403 from a knowledge tool says that the key may lack the `KNOWLEDGE_FOLDER_API` scope, the knowledge base may not be shared with it, or the write may need the Editor role.

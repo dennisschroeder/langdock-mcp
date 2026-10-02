@@ -56,6 +56,7 @@ const (
 	integrationsAPI apiFamily = iota
 	agentsAPI
 	knowledgeAPI
+	usageAPI
 )
 
 // familyOf classifies a request path relative to the base URL.
@@ -66,6 +67,8 @@ func familyOf(path string) apiFamily {
 		return agentsAPI
 	case p == "/knowledge" || strings.HasPrefix(p, "/knowledge/"):
 		return knowledgeAPI
+	case strings.HasPrefix(p, "/export/"):
+		return usageAPI
 	}
 	return integrationsAPI
 }
@@ -78,6 +81,8 @@ func (e *APIError) Error() string {
 		hint = agentStatusHint(e.Status)
 	case knowledgeAPI:
 		hint = knowledgeStatusHint(e.Status)
+	case usageAPI:
+		hint = usageStatusHint(e.Status)
 	}
 	if hint != "" {
 		msg += " (" + hint + ")"
@@ -152,7 +157,23 @@ func knowledgeStatusHint(status int) string {
 	return ""
 }
 
-var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key with the INTEGRATION_API scope (integration tools), the Agent API scope (agent tools) and the KNOWLEDGE_FOLDER_API scope (knowledge tools) in the MCP server's environment")
+// usageStatusHint covers the Usage Export API, which needs its own
+// USAGE_EXPORT_API scope that only workspace admins can grant.
+func usageStatusHint(status int) string {
+	switch status {
+	case http.StatusBadRequest:
+		return "invalid date range, group_by not supported for this export, or more than 1,000,000 usage rows (USAGE_EXPORT_TOO_LARGE); use a shorter period and combine the results"
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return "invalid or missing API key, or the key lacks the USAGE_EXPORT_API scope"
+	case http.StatusNotFound:
+		return "no usage data in the selected period"
+	case http.StatusTooManyRequests:
+		return "rate limit of 500 requests/minute exceeded, retry later"
+	}
+	return ""
+}
+
+var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key with the INTEGRATION_API scope (integration tools), the Agent API scope (agent tools), the KNOWLEDGE_FOLDER_API scope (knowledge tools) and the USAGE_EXPORT_API scope (export_usage) in the MCP server's environment")
 
 // doJSON sends body (if non-nil) as JSON and returns the raw response body.
 func (c *Client) doJSON(ctx context.Context, method, path string, body any) ([]byte, error) {
@@ -221,15 +242,23 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body io.Re
 	return req, nil
 }
 
+const maxResponseSize = 10 << 20
+
+var errResponseTooLarge = fmt.Errorf("Langdock response exceeds %d MB", maxResponseSize>>20)
+
 func (c *Client) send(hc *http.Client, req *http.Request, api apiFamily) ([]byte, error) {
 	resp, err := hc.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize+1))
 	if err != nil {
 		return nil, err
+	}
+	// A cut-off body would reach the model as silently broken JSON.
+	if len(body) > maxResponseSize {
+		return nil, errResponseTooLarge
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return nil, &APIError{Status: resp.StatusCode, Body: strings.TrimSpace(string(body)), API: api}
