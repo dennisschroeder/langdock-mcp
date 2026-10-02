@@ -17,6 +17,7 @@ gofmt -l .                          # must print nothing
 Single package: `main.go` (wiring from env) → `client.go` (`Client`, a thin HTTP wrapper returning raw response bodies and `*APIError` for non-2xx) → `tools.go` (Integrations API: input structs, tool registration, handlers, shared schema helpers). Every other API lives in its own file, registered from `register()`:
 
 - `agents.go`: Agents API
+- `audit_logs.go`: Audit Logs API
 - `knowledge.go`: Knowledge Folder API
 - `prompts.go`: Prompt Library API
 - `scheduled_tasks.go`: Scheduled Tasks API (`/automations/v1`)
@@ -24,7 +25,7 @@ Single package: `main.go` (wiring from env) → `client.go` (`Client`, a thin HT
 - `users.go`: User Management API
 - `workflows.go`: Workflow API and Workflow Run Export API
 
-The go-sdk owns the protocol, and tool input schemas are inferred from the input structs, then patched by `schemaFor` with enums and `maxLength` values that struct tags cannot express. Tool inputs deliberately use the API's camelCase field names so they match the Langdock docs one-to-one.
+The go-sdk owns the protocol, and tool input schemas are inferred from the input structs, then patched by `schemaFor` with enums and `maxLength` values that struct tags cannot express. Tool inputs deliberately use the API's field names (camelCase, snake_case for the Audit Logs API) so they match the Langdock docs one-to-one.
 
 Handlers return Langdock's JSON response verbatim as text. A returned Go error becomes a tool-level error (`IsError`) the model can read. `APIError` adds a hint per documented status code and picks the hints per API family, which `familyOf` derives from the request path prefix relative to the base URL. Paths without a known prefix belong to the Integrations API. Newer API files keep their own status-hint function, and shared lists (the files above, the scope table in the README, `errNoAPIKey`) hold one entry per line, so parallel API branches merge by keeping both sides.
 
@@ -49,6 +50,7 @@ Handlers return Langdock's JSON response verbatim as text. A returned Go error b
 - Endpoint paths, methods and field limits come from the Langdock docs (index at https://docs.langdock.com/llms.txt). Re-check there before changing them:
   - Integrations API: https://docs.langdock.com/en/developer/integrations-api/
   - Agents API: https://docs.langdock.com/en/developer/agents-api/
+  - Audit Logs API: https://docs.langdock.com/en/developer/audit-logs-api/
   - Knowledge Folder API: https://docs.langdock.com/en/developer/knowledge-folder-api/
   - Prompt Library API: https://docs.langdock.com/en/developer/prompts-api/
   - Scheduled Tasks API: https://docs.langdock.com/en/developer/scheduled-tasks-api/

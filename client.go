@@ -18,8 +18,7 @@ import (
 // https://<domain>/api/public instead (LANGDOCK_BASE_URL).
 const DefaultBaseURL = "https://api.langdock.com"
 
-// Client is a thin wrapper around Langdock's Integrations, Agents, Knowledge
-// Folder and Prompt Library APIs. It returns response bodies verbatim so tools
+// Client is a thin wrapper around Langdock's public APIs. It returns response bodies verbatim so tools
 // can hand them to the model unchanged.
 type Client struct {
 	baseURL string
@@ -62,6 +61,7 @@ const (
 	workflowsAPI
 	workflowExportAPI
 	scheduledTasksAPI
+	auditLogsAPI
 )
 
 // familyOf classifies a request path relative to the base URL.
@@ -84,6 +84,8 @@ func familyOf(path string) apiFamily {
 		return workflowExportAPI
 	case p == "/automations/v1" || strings.HasPrefix(p, "/automations/v1/"):
 		return scheduledTasksAPI
+	case strings.HasPrefix(p, "/audit-logs/"):
+		return auditLogsAPI
 	}
 	return integrationsAPI
 }
@@ -108,6 +110,8 @@ func (e *APIError) Error() string {
 		hint = workflowExportStatusHint(e.Status)
 	case scheduledTasksAPI:
 		hint = scheduledTaskStatusHint(e.Status)
+	case auditLogsAPI:
+		hint = auditLogStatusHint(e.Status)
 	}
 	if hint != "" {
 		msg += " (" + hint + ")"
@@ -185,6 +189,7 @@ func knowledgeStatusHint(status int) string {
 var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key in the MCP server's environment with the scope each tool family needs: " + strings.Join([]string{
 	"INTEGRATION_API (integration tools)",
 	"the Agent API scope (agent tools)",
+	"AUDIT_LOG_API (audit log tools)",
 	"KNOWLEDGE_FOLDER_API (knowledge tools)",
 	"PROMPT_API (prompt tools)",
 	"AUTOMATION_API (scheduled task tools)",

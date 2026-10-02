@@ -4,6 +4,7 @@ An MCP server that exposes these Langdock APIs as tools, so that an MCP client s
 
 - [Integrations API](https://docs.langdock.com/en/developer/integrations-api/integrations-overview): custom integrations with their actions, triggers, auth configuration and icon
 - [Agents API](https://docs.langdock.com/en/developer/agents-api/agents-overview) (build endpoints): agents
+- [Audit Logs API](https://docs.langdock.com/en/developer/audit-logs-api/intro-to-audit-logs-api): the workspace audit log (read-only)
 - [Knowledge Folder API](https://docs.langdock.com/en/developer/knowledge-folder-api/knowledge-folder-overview): files and sharing of knowledge bases
 - [Prompt Library API](https://docs.langdock.com/en/developer/prompts-api/prompts-overview): prompts and prompt folders
 - [Scheduled Tasks API](https://docs.langdock.com/en/developer/scheduled-tasks-api/scheduled-tasks-overview): scheduled tasks of a service account
@@ -154,6 +155,14 @@ These tools need a workspace API key of a service account with the `AUTOMATION_A
 
 `update_scheduled_task` sends only the fields the caller passes, and the API keeps everything else. The schedule is validated after merging with the stored clock fields. Passed arrays replace the stored list. `clearAssistantId` and `clearTaggedAssistantId` remove the agents. `run_scheduled_task` only enqueues a run and returns its `runId`; it also works on paused and `MANUAL` tasks and does not resume them.
 
+## Audit log tools
+
+| Tool | Endpoint |
+|---|---|
+| `list_audit_logs` | `GET /audit-logs/{workspace_id}` |
+
+`list_audit_logs` needs an API key with the `AUDIT_LOG_API` scope, which only workspace admins can create, and `workspace_id` must be the key's own workspace. Its inputs keep the API's snake_case query names (`entity_type`, `actor_id`). Pages hold at most 50 entries; pass `next_cursor` as `cursor` until it is null. Entries are retained for 90 days.
+
 ## Configuration
 
 | Variable | Required | Description |
@@ -167,6 +176,7 @@ Each tool family needs its own scope on the key:
 |---|---|
 | Integration tools | `INTEGRATION_API` |
 | Agent tools | Agent API scope, plus access to the agent |
+| `list_audit_logs` | `AUDIT_LOG_API` |
 | Knowledge tools | `KNOWLEDGE_FOLDER_API`, plus access to the knowledge base |
 | Prompt tools | `PROMPT_API` |
 | Scheduled task tools | `AUTOMATION_API` (labelled Scheduled Tasks API), on a service-account workspace key |
@@ -181,6 +191,7 @@ A 403 from a knowledge tool says that the key may lack the `KNOWLEDGE_FOLDER_API
 A 403 from a user management tool says that the key may lack the `USER_MANAGEMENT_API` scope.
 A 403 from a workflow tool names the workflow scope the call needs, and for update, publish and run listing it can also mean that the workflow does not exist.
 A 403 from a prompt tool says that the key may lack the `PROMPT_API` scope, or that its owner lacks write access or the `sharePrompts` permission.
+A 403 from `list_audit_logs` says that the key may lack the `AUDIT_LOG_API` scope or that `workspace_id` is not the key's workspace.
 
 ## Installation
 
