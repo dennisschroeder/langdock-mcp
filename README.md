@@ -6,6 +6,7 @@ An MCP server that exposes these Langdock APIs as tools, so that an MCP client s
 - [Agents API](https://docs.langdock.com/en/developer/agents-api/agents-overview) (build endpoints): agents
 - [Knowledge Folder API](https://docs.langdock.com/en/developer/knowledge-folder-api/knowledge-folder-overview): files and sharing of knowledge bases
 - [Prompt Library API](https://docs.langdock.com/en/developer/prompts-api/prompts-overview): prompts and prompt folders
+- [Scheduled Tasks API](https://docs.langdock.com/en/developer/scheduled-tasks-api/scheduled-tasks-overview): scheduled tasks of a service account
 - [Usage Export API](https://docs.langdock.com/en/developer/usage-export-api/intro-to-usage-export-api): workspace usage data
 - [User Management API](https://docs.langdock.com/en/developer/user-management-api/user-management-overview): workspace membership
 - [Workflow API](https://docs.langdock.com/en/developer/workflow-api/workflows-overview): workflows and their run history
@@ -136,6 +137,23 @@ A workflow has a draft graph (`nodes` and `edges`, version `0`) and, once publis
 
 `list_workflow_runs` pages with a cursor and filters by run, mode, status, version and date range. `export_workflow_runs` returns flat rows per node execution for a required date range, is not paginated and fails above 10,000 runs or 8,000,000 payload bytes.
 
+## Scheduled task tools
+
+| Tool | Endpoint |
+|---|---|
+| `list_scheduled_tasks` | `GET /automations/v1` |
+| `create_scheduled_task` | `POST /automations/v1` |
+| `get_scheduled_task` | `GET /automations/v1/{automationId}` |
+| `update_scheduled_task` | `PATCH /automations/v1/{automationId}` |
+| `delete_scheduled_task` | `DELETE /automations/v1/{automationId}` |
+| `pause_scheduled_task` | `POST /automations/v1/{automationId}/pause` |
+| `resume_scheduled_task` | `POST /automations/v1/{automationId}/resume` |
+| `run_scheduled_task` | `POST /automations/v1/{automationId}/run` |
+
+These tools need a workspace API key of a service account with the `AUTOMATION_API` scope (labelled Scheduled Tasks API), and Scheduled Tasks must be enabled for that account. Personal API keys are rejected. The key only sees and changes the tasks it created, at most 10 per owner.
+
+`update_scheduled_task` sends only the fields the caller passes, and the API keeps everything else. The schedule is validated after merging with the stored clock fields. Passed arrays replace the stored list. `clearAssistantId` and `clearTaggedAssistantId` remove the agents. `run_scheduled_task` only enqueues a run and returns its `runId`; it also works on paused and `MANUAL` tasks and does not resume them.
+
 ## Configuration
 
 | Variable | Required | Description |
@@ -151,6 +169,7 @@ Each tool family needs its own scope on the key:
 | Agent tools | Agent API scope, plus access to the agent |
 | Knowledge tools | `KNOWLEDGE_FOLDER_API`, plus access to the knowledge base |
 | Prompt tools | `PROMPT_API` |
+| Scheduled task tools | `AUTOMATION_API` (labelled Scheduled Tasks API), on a service-account workspace key |
 | `export_usage` | `USAGE_EXPORT_API` |
 | User management tools | `USER_MANAGEMENT_API` |
 | Workflow tools | `WORKFLOW_API` to read, list runs and export, `WORKFLOW_WRITE_API` to create, update and publish, `WORKFLOW_DELETE_API` to delete, plus access to the workflow |

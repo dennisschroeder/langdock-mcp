@@ -19,6 +19,7 @@ Single package: `main.go` (wiring from env) → `client.go` (`Client`, a thin HT
 - `agents.go`: Agents API
 - `knowledge.go`: Knowledge Folder API
 - `prompts.go`: Prompt Library API
+- `scheduled_tasks.go`: Scheduled Tasks API (`/automations/v1`)
 - `usage.go`: Usage Export API
 - `users.go`: User Management API
 - `workflows.go`: Workflow API and Workflow Run Export API
@@ -32,6 +33,7 @@ Handlers return Langdock's JSON response verbatim as text. A returned Go error b
 - `update_action` must stay a read-merge-write. The API's PUT clears `description` and drops all input fields that are not resent, which would silently destroy an action when a caller only changes its code. `code` and `requiresConfirmation` are preserved by the API when omitted, so they are only sent when given. `jsonSchema` on input fields is not returned by `get_integration` but is preserved server-side when the field slug (derived from its label) is unchanged.
 - `update_trigger` is a full replace and says so in its description. `get_integration` returns no `pollingCode` or trigger input fields, so a merge is impossible.
 - `update_agent` must stay a plain pass-through PATCH, not a read-merge-write. The API already leaves omitted fields unchanged, and `get_agent` returns the published version, so merging from it would overwrite unpublished draft changes. `get_agent` also omits `slug`, `options`, `fileTypes` and `emailDomain` of input fields, so they cannot be round-tripped.
+- `update_scheduled_task` must stay a plain pass-through PATCH. The API leaves omitted fields unchanged and validates the schedule after merging with the stored clock, so a read-merge-write would add nothing. `clearAssistantId` / `clearTaggedAssistantId` send an explicit `null`.
 - `add_agent_actions` / `remove_agent_actions` are read-merge-writes over the published action list and say so in their descriptions. They keep action entries as raw JSON so undocumented properties such as `connectionId` survive; null values are dropped before resending.
 - `update_prompt` and `update_prompt_folder` must stay plain pass-through PATCHes. The API leaves omitted fields unchanged, so a read-merge-write would add nothing. `promptFolderId` and `sharedWithGroupId` are cleared with an explicit null, sent via the `clearPromptFolderId` / `clearSharedWithGroupId` flags.
 - Prompt and prompt folder path ids are validated as UUIDs, because a non-UUID id such as `folders` addresses a different route under `/prompts/v1`.
@@ -49,6 +51,7 @@ Handlers return Langdock's JSON response verbatim as text. A returned Go error b
   - Agents API: https://docs.langdock.com/en/developer/agents-api/
   - Knowledge Folder API: https://docs.langdock.com/en/developer/knowledge-folder-api/
   - Prompt Library API: https://docs.langdock.com/en/developer/prompts-api/
+  - Scheduled Tasks API: https://docs.langdock.com/en/developer/scheduled-tasks-api/
   - User Management API: https://docs.langdock.com/en/developer/user-management-api/
 - Workflow API endpoints come from https://docs.langdock.com/en/developer/workflow-api/workflows-overview.md and the Workflow Run Export API from https://docs.langdock.com/en/developer/workflow-api/intro-to-workflow-api.md. `familyOf` maps `/workflows/v1/` to the Workflow API hints and other `/workflows/` paths to the export hints.
 

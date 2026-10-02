@@ -61,6 +61,7 @@ const (
 	usersAPI
 	workflowsAPI
 	workflowExportAPI
+	scheduledTasksAPI
 )
 
 // familyOf classifies a request path relative to the base URL.
@@ -81,6 +82,8 @@ func familyOf(path string) apiFamily {
 		return workflowsAPI
 	case strings.HasPrefix(p, "/workflows/"):
 		return workflowExportAPI
+	case p == "/automations/v1" || strings.HasPrefix(p, "/automations/v1/"):
+		return scheduledTasksAPI
 	}
 	return integrationsAPI
 }
@@ -103,6 +106,8 @@ func (e *APIError) Error() string {
 		hint = workflowStatusHint(e.Status)
 	case workflowExportAPI:
 		hint = workflowExportStatusHint(e.Status)
+	case scheduledTasksAPI:
+		hint = scheduledTaskStatusHint(e.Status)
 	}
 	if hint != "" {
 		msg += " (" + hint + ")"
@@ -182,6 +187,7 @@ var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key 
 	"the Agent API scope (agent tools)",
 	"KNOWLEDGE_FOLDER_API (knowledge tools)",
 	"PROMPT_API (prompt tools)",
+	"AUTOMATION_API (scheduled task tools)",
 	"USAGE_EXPORT_API (export_usage)",
 	"USER_MANAGEMENT_API (user tools)",
 	"WORKFLOW_API, WORKFLOW_WRITE_API and WORKFLOW_DELETE_API (workflow tools)",
