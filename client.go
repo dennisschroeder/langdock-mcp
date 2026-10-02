@@ -56,6 +56,8 @@ const (
 	integrationsAPI apiFamily = iota
 	agentsAPI
 	knowledgeAPI
+	workflowsAPI
+	workflowExportAPI
 )
 
 // familyOf classifies a request path relative to the base URL.
@@ -66,6 +68,10 @@ func familyOf(path string) apiFamily {
 		return agentsAPI
 	case p == "/knowledge" || strings.HasPrefix(p, "/knowledge/"):
 		return knowledgeAPI
+	case strings.HasPrefix(p, "/workflows/v1/"):
+		return workflowsAPI
+	case strings.HasPrefix(p, "/workflows/"):
+		return workflowExportAPI
 	}
 	return integrationsAPI
 }
@@ -78,6 +84,10 @@ func (e *APIError) Error() string {
 		hint = agentStatusHint(e.Status)
 	case knowledgeAPI:
 		hint = knowledgeStatusHint(e.Status)
+	case workflowsAPI:
+		hint = workflowStatusHint(e.Status)
+	case workflowExportAPI:
+		hint = workflowExportStatusHint(e.Status)
 	}
 	if hint != "" {
 		msg += " (" + hint + ")"
