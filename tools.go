@@ -283,6 +283,7 @@ func (s *Server) register() {
 	s.registerAgents()
 	s.registerKnowledge()
 	s.registerUsage()
+	s.registerUsers()
 }
 
 func actionSchema(sc *jsonschema.Schema) {

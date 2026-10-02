@@ -14,9 +14,16 @@ gofmt -l .                          # must print nothing
 
 ## Architecture
 
-Single package: `main.go` (wiring from env) → `client.go` (`Client`, a thin HTTP wrapper returning raw response bodies and `*APIError` for non-2xx) → `tools.go` (Integrations API: input structs, tool registration, handlers, shared schema helpers) `agents.go` (Agents API), `knowledge.go` (Knowledge Folder API) and `usage.go` (Usage Export API), the latter three registered from `register()`. The go-sdk owns the protocol, and tool input schemas are inferred from the input structs, then patched by `schemaFor` with enums and `maxLength` values that struct tags cannot express. Tool inputs deliberately use the API's camelCase field names so they match the Langdock docs one-to-one.
+Single package: `main.go` (wiring from env) → `client.go` (`Client`, a thin HTTP wrapper returning raw response bodies and `*APIError` for non-2xx) → `tools.go` (Integrations API: input structs, tool registration, handlers, shared schema helpers). Every other API lives in its own file, registered from `register()`:
 
-Handlers return Langdock's JSON response verbatim as text. A returned Go error becomes a tool-level error (`IsError`) the model can read. `APIError` adds a hint per documented status code and picks the hints per API family, which `familyOf` derives from the request path relative to the base URL (`/agent/v1/` for the Agents API, `/knowledge` for the Knowledge Folder API, everything else for the Integrations API).
+- `agents.go`: Agents API
+- `knowledge.go`: Knowledge Folder API
+- `usage.go`: Usage Export API
+- `users.go`: User Management API
+
+The go-sdk owns the protocol, and tool input schemas are inferred from the input structs, then patched by `schemaFor` with enums and `maxLength` values that struct tags cannot express. Tool inputs deliberately use the API's camelCase field names so they match the Langdock docs one-to-one.
+
+Handlers return Langdock's JSON response verbatim as text. A returned Go error becomes a tool-level error (`IsError`) the model can read. `APIError` adds a hint per documented status code and picks the hints per API family, which `familyOf` derives from the request path prefix relative to the base URL. Paths without a known prefix belong to the Integrations API. Newer API files keep their own status-hint function, and shared lists (the files above, the scope table in the README, `errNoAPIKey`) hold one entry per line, so parallel API branches merge by keeping both sides.
 
 ## Invariants
 
@@ -28,9 +35,10 @@ Handlers return Langdock's JSON response verbatim as text. A returned Go error b
 - `export_usage` always calls the explicit `/json` or `/csv` route, never the format-less default, and both return a JSON envelope (rows, or a signed download URL). `group_by` is validated per `dataType` locally against `usageGroupBy`, because the schema enum cannot express the dependency. Its field name stays snake_case because the API uses `group_by`.
 - `Client.send` fails with `errResponseTooLarge` instead of truncating bodies over 10 MB, because a cut-off body would reach the model as broken JSON.
 - Usage Export API endpoints come from https://docs.langdock.com/en/developer/usage-export-api/intro-to-usage-export-api.md.
+- `invite_users` sends emails and `update_user_role` / `deactivate_user` change access, so their descriptions must keep stating those side effects. The role enum is lowercase because the API rejects other casing.
 - Never log or echo the API key.
 - `serverVersion` is a `var` because GoReleaser sets it from the tag via `-ldflags -X main.serverVersion=…`. Keep its default in step with the latest tag.
-- Endpoint paths, methods and field limits come from https://docs.langdock.com/en/developer/integrations-api/, https://docs.langdock.com/en/developer/agents-api/ and https://docs.langdock.com/en/developer/knowledge-folder-api/ (index at https://docs.langdock.com/llms.txt). Re-check there before changing them.
+- Endpoint paths, methods and field limits come from https://docs.langdock.com/en/developer/integrations-api/, https://docs.langdock.com/en/developer/agents-api/, https://docs.langdock.com/en/developer/knowledge-folder-api/ and https://docs.langdock.com/en/developer/user-management-api/ (index at https://docs.langdock.com/llms.txt). Re-check there before changing them.
 
 ## Gotchas
 

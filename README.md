@@ -1,6 +1,6 @@
 # langdock-mcp
 
-An MCP server that exposes Langdock's [Integrations API](https://docs.langdock.com/en/developer/integrations-api/integrations-overview) and the build endpoints of the [Agents API](https://docs.langdock.com/en/developer/agents-api/agents-overview) and the [Knowledge Folder API](https://docs.langdock.com/en/developer/knowledge-folder-api/knowledge-folder-overview) as tools. An MCP client such as Claude Code or Claude Desktop can use it to create and maintain custom Langdock integrations (actions, triggers, auth configuration, icon), agents, and the files and sharing of knowledge bases.
+An MCP server that exposes Langdock's [Integrations API](https://docs.langdock.com/en/developer/integrations-api/integrations-overview), the build endpoints of the [Agents API](https://docs.langdock.com/en/developer/agents-api/agents-overview) and the [Knowledge Folder API](https://docs.langdock.com/en/developer/knowledge-folder-api/knowledge-folder-overview), and the [User Management API](https://docs.langdock.com/en/developer/user-management-api/user-management-overview) as tools. An MCP client such as Claude Code or Claude Desktop can use it to create and maintain custom Langdock integrations (actions, triggers, auth configuration, icon), agents, the files and sharing of knowledge bases, and workspace membership.
 
 Langdock's own MCP server (`https://api.langdock.com/mcp`) only exposes workspace agents (`find_agent`, `ask_agent`). As of September 2026 there is no official MCP server for the Integrations API.
 
@@ -80,14 +80,38 @@ The API cannot create or delete knowledge bases; both are only possible in the L
 
 `export_usage` needs an API key with the `USAGE_EXPORT_API` scope, which only workspace admins can grant and which exposes usage data of the whole workspace. `format: json` (the default) returns the rows inline; `format: csv` returns a signed download URL, which suits exports beyond the server's 10 MB response limit. `group_by` accepts `model` for users, agents and API keys, `source` or `deployment` (BYOK only) for models, and nothing for projects and workflows. One request scans at most 1,000,000 usage rows, so long periods have to be split.
 
+## User management tools
+
+| Tool | Endpoint |
+|---|---|
+| `invite_users` | `POST /user-management/v1/invite` |
+| `update_user_role` | `POST /user-management/v1/update-user-role` |
+| `deactivate_user` | `POST /user-management/v1/deactivate-user` |
+
+`invite_users` sends an invitation email to every new address and approves pending join requests from them. Existing members are skipped, and a 200 response can still list rejected addresses in `invalidEmails`. Roles are `member`, `editor` and `admin`; the API refuses to demote the last active admin. `deactivate_user` revokes access immediately but keeps the user's data for a later re-invite; the API cannot reactivate users.
+
 ## Configuration
 
 | Variable | Required | Description |
 |---|---|---|
-| `LANGDOCK_API_KEY` | yes | API key created by a workspace admin in the Langdock workspace settings. Integration tools need the `INTEGRATION_API` scope, agent tools the Agent API scope and access to the agent, knowledge tools the `KNOWLEDGE_FOLDER_API` scope and access to the knowledge base, `export_usage` the `USAGE_EXPORT_API` scope. |
+| `LANGDOCK_API_KEY` | yes | API key created by a workspace admin in the Langdock workspace settings, with the scopes from the table below. |
 | `LANGDOCK_BASE_URL` | no | Defaults to `https://api.langdock.com`. Dedicated deployments use `https://<your-domain>/api/public`. |
 
-The key is checked lazily. A missing key produces a tool error on the first call, not a startup failure. A 401 or 403 from an agent tool says that the key may lack the Agent API scope. A 403 from a knowledge tool says that the key may lack the `KNOWLEDGE_FOLDER_API` scope, the knowledge base may not be shared with it, or the write may need the Editor role.
+Each tool family needs its own scope on the key:
+
+| Tools | Scope |
+|---|---|
+| Integration tools | `INTEGRATION_API` |
+| Agent tools | Agent API scope, plus access to the agent |
+| Knowledge tools | `KNOWLEDGE_FOLDER_API`, plus access to the knowledge base |
+| `export_usage` | `USAGE_EXPORT_API` |
+| User management tools | `USER_MANAGEMENT_API` |
+
+The key is checked lazily.
+A missing key produces a tool error on the first call, not a startup failure.
+A 401 or 403 from an agent tool says that the key may lack the Agent API scope.
+A 403 from a knowledge tool says that the key may lack the `KNOWLEDGE_FOLDER_API` scope, the knowledge base may not be shared with it, or the write may need the Editor role.
+A 403 from a user management tool says that the key may lack the `USER_MANAGEMENT_API` scope.
 
 ## Installation
 

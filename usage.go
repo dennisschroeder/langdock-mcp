@@ -83,3 +83,19 @@ func (s *Server) exportUsage(ctx context.Context, _ *mcp.CallToolRequest, in Exp
 	}
 	return res, out, err
 }
+
+// usageStatusHint covers the Usage Export API, which needs its own
+// USAGE_EXPORT_API scope that only workspace admins can grant.
+func usageStatusHint(status int) string {
+	switch status {
+	case http.StatusBadRequest:
+		return "invalid date range, group_by not supported for this export, or more than 1,000,000 usage rows (USAGE_EXPORT_TOO_LARGE); use a shorter period and combine the results"
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return "invalid or missing API key, or the key lacks the USAGE_EXPORT_API scope"
+	case http.StatusNotFound:
+		return "no usage data in the selected period"
+	case http.StatusTooManyRequests:
+		return "rate limit of 500 requests/minute exceeded, retry later"
+	}
+	return ""
+}

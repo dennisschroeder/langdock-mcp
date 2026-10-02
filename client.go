@@ -57,6 +57,7 @@ const (
 	agentsAPI
 	knowledgeAPI
 	usageAPI
+	usersAPI
 )
 
 // familyOf classifies a request path relative to the base URL.
@@ -69,6 +70,8 @@ func familyOf(path string) apiFamily {
 		return knowledgeAPI
 	case strings.HasPrefix(p, "/export/"):
 		return usageAPI
+	case strings.HasPrefix(p, "/user-management/"):
+		return usersAPI
 	}
 	return integrationsAPI
 }
@@ -83,6 +86,8 @@ func (e *APIError) Error() string {
 		hint = knowledgeStatusHint(e.Status)
 	case usageAPI:
 		hint = usageStatusHint(e.Status)
+	case usersAPI:
+		hint = userStatusHint(e.Status)
 	}
 	if hint != "" {
 		msg += " (" + hint + ")"
@@ -157,23 +162,13 @@ func knowledgeStatusHint(status int) string {
 	return ""
 }
 
-// usageStatusHint covers the Usage Export API, which needs its own
-// USAGE_EXPORT_API scope that only workspace admins can grant.
-func usageStatusHint(status int) string {
-	switch status {
-	case http.StatusBadRequest:
-		return "invalid date range, group_by not supported for this export, or more than 1,000,000 usage rows (USAGE_EXPORT_TOO_LARGE); use a shorter period and combine the results"
-	case http.StatusUnauthorized, http.StatusForbidden:
-		return "invalid or missing API key, or the key lacks the USAGE_EXPORT_API scope"
-	case http.StatusNotFound:
-		return "no usage data in the selected period"
-	case http.StatusTooManyRequests:
-		return "rate limit of 500 requests/minute exceeded, retry later"
-	}
-	return ""
-}
-
-var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key with the INTEGRATION_API scope (integration tools), the Agent API scope (agent tools), the KNOWLEDGE_FOLDER_API scope (knowledge tools) and the USAGE_EXPORT_API scope (export_usage) in the MCP server's environment")
+var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key in the MCP server's environment with the scope each tool family needs: " + strings.Join([]string{
+	"INTEGRATION_API (integration tools)",
+	"the Agent API scope (agent tools)",
+	"KNOWLEDGE_FOLDER_API (knowledge tools)",
+	"USAGE_EXPORT_API (export_usage)",
+	"USER_MANAGEMENT_API (user tools)",
+}, ", "))
 
 // doJSON sends body (if non-nil) as JSON and returns the raw response body.
 func (c *Client) doJSON(ctx context.Context, method, path string, body any) ([]byte, error) {
