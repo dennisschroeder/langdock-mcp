@@ -84,7 +84,7 @@ The API cannot create or delete knowledge bases; both are only possible in the L
 
 | Variable | Required | Description |
 |---|---|---|
-| `LANGDOCK_API_KEY` | yes | API key created by a workspace admin in the Langdock workspace settings. Integration tools need the `INTEGRATION_API` scope, agent tools the Agent API scope and access to the agent, knowledge tools the `KNOWLEDGE_FOLDER_API` scope and access to the knowledge base. |
+| `LANGDOCK_API_KEY` | yes | API key created by a workspace admin in the Langdock workspace settings. Integration tools need the `INTEGRATION_API` scope, agent tools the Agent API scope and access to the agent, knowledge tools the `KNOWLEDGE_FOLDER_API` scope and access to the knowledge base, `export_usage` the `USAGE_EXPORT_API` scope. |
 | `LANGDOCK_BASE_URL` | no | Defaults to `https://api.langdock.com`. Dedicated deployments use `https://<your-domain>/api/public`. |
 
 The key is checked lazily. A missing key produces a tool error on the first call, not a startup failure. A 401 or 403 from an agent tool says that the key may lack the Agent API scope. A 403 from a knowledge tool says that the key may lack the `KNOWLEDGE_FOLDER_API` scope, the knowledge base may not be shared with it, or the write may need the Editor role.
