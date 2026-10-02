@@ -58,6 +58,8 @@ const (
 	knowledgeAPI
 	usageAPI
 	usersAPI
+	workflowsAPI
+	workflowExportAPI
 )
 
 // familyOf classifies a request path relative to the base URL.
@@ -72,6 +74,10 @@ func familyOf(path string) apiFamily {
 		return usageAPI
 	case strings.HasPrefix(p, "/user-management/"):
 		return usersAPI
+	case strings.HasPrefix(p, "/workflows/v1/"):
+		return workflowsAPI
+	case strings.HasPrefix(p, "/workflows/"):
+		return workflowExportAPI
 	}
 	return integrationsAPI
 }
@@ -88,6 +94,10 @@ func (e *APIError) Error() string {
 		hint = usageStatusHint(e.Status)
 	case usersAPI:
 		hint = userStatusHint(e.Status)
+	case workflowsAPI:
+		hint = workflowStatusHint(e.Status)
+	case workflowExportAPI:
+		hint = workflowExportStatusHint(e.Status)
 	}
 	if hint != "" {
 		msg += " (" + hint + ")"
@@ -168,6 +178,7 @@ var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key 
 	"KNOWLEDGE_FOLDER_API (knowledge tools)",
 	"USAGE_EXPORT_API (export_usage)",
 	"USER_MANAGEMENT_API (user tools)",
+	"WORKFLOW_API, WORKFLOW_WRITE_API and WORKFLOW_DELETE_API (workflow tools)",
 }, ", "))
 
 // doJSON sends body (if non-nil) as JSON and returns the raw response body.

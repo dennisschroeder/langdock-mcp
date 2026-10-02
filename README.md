@@ -90,6 +90,27 @@ The API cannot create or delete knowledge bases; both are only possible in the L
 
 `invite_users` sends an invitation email to every new address and approves pending join requests from them. Existing members are skipped, and a 200 response can still list rejected addresses in `invalidEmails`. Roles are `member`, `editor` and `admin`; the API refuses to demote the last active admin. `deactivate_user` revokes access immediately but keeps the user's data for a later re-invite; the API cannot reactivate users.
 
+## Workflow tools
+
+| Tool | Endpoint |
+|---|---|
+| `list_workflows` | `GET /workflows/v1/list` |
+| `get_workflow` | `GET /workflows/v1/get?workflowId=…` |
+| `create_workflow` | `POST /workflows/v1/create` |
+| `update_workflow` | `PATCH /workflows/v1/update` |
+| `publish_workflow` | `POST /workflows/v1/publish` |
+| `delete_workflow` | `DELETE /workflows/v1/delete?workflowId=…` (permanent) |
+| `list_workflow_runs` | `GET /workflows/v1/runs?workflowId=…` (paginated) |
+| `export_workflow_runs` | `GET /workflows/{workflowId}/runs?from=…&to=…` (Workflow Run Export API) |
+
+The key needs the `WORKFLOW_API` scope to read, list runs and export, `WORKFLOW_WRITE_API` to create, update and publish, and `WORKFLOW_DELETE_API` to delete. Only workspace keys can hold the delete scope.
+
+A workflow has a draft graph (`nodes` and `edges`, version `0`) and, once published, a separate published graph (`activeVersion`). `create_workflow` creates an inactive draft. `update_workflow` only ever changes the draft graph, so the published version keeps running until `publish_workflow` makes the draft the new active version and starts its schedules and webhooks. `update_workflow` sends only the fields the caller passes: omitted metadata and omitted `limits` fields stay unchanged (the docs state this explicitly only for `limits`), `removeLimits` sets caps to null, and `nodes` with `edges` replaces the whole draft graph. The API rejects metadata and graph changes in one request, so the tool refuses such calls before sending. Redacted secrets from `get_workflow` can be sent back unchanged and keep their stored values.
+
+`delete_workflow` permanently deletes the workflow with all versions and asks for no confirmation. Use `update_workflow` with `status: "INACTIVE"` to pause a workflow instead.
+
+`list_workflow_runs` pages with a cursor and filters by run, mode, status, version and date range. `export_workflow_runs` returns flat rows per node execution for a required date range, is not paginated and fails above 10,000 runs or 8,000,000 payload bytes.
+
 ## Configuration
 
 | Variable | Required | Description |
@@ -106,12 +127,14 @@ Each tool family needs its own scope on the key:
 | Knowledge tools | `KNOWLEDGE_FOLDER_API`, plus access to the knowledge base |
 | `export_usage` | `USAGE_EXPORT_API` |
 | User management tools | `USER_MANAGEMENT_API` |
+| Workflow tools | `WORKFLOW_API` to read, list runs and export, `WORKFLOW_WRITE_API` to create, update and publish, `WORKFLOW_DELETE_API` to delete, plus access to the workflow |
 
 The key is checked lazily.
 A missing key produces a tool error on the first call, not a startup failure.
 A 401 or 403 from an agent tool says that the key may lack the Agent API scope.
 A 403 from a knowledge tool says that the key may lack the `KNOWLEDGE_FOLDER_API` scope, the knowledge base may not be shared with it, or the write may need the Editor role.
 A 403 from a user management tool says that the key may lack the `USER_MANAGEMENT_API` scope.
+A 403 from a workflow tool names the workflow scope the call needs, and for update, publish and run listing it can also mean that the workflow does not exist.
 
 ## Installation
 
