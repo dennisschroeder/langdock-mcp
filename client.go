@@ -18,12 +18,15 @@ import (
 // https://<domain>/api/public instead (LANGDOCK_BASE_URL).
 const DefaultBaseURL = "https://api.langdock.com"
 
-// Client is a thin wrapper around Langdock's Integrations and Agents APIs. It returns
-// response bodies verbatim so tools can hand them to the model unchanged.
+// Client is a thin wrapper around Langdock's Integrations, Agents and
+// Knowledge Folder APIs. It returns response bodies verbatim so tools can hand
+// them to the model unchanged.
 type Client struct {
 	baseURL string
 	apiKey  string
 	http    *http.Client
+	// upload has a longer timeout because knowledge files may be up to 256 MB.
+	upload *http.Client
 }
 
 func NewClient(baseURL, apiKey string) *Client {
@@ -34,6 +37,7 @@ func NewClient(baseURL, apiKey string) *Client {
 		baseURL: strings.TrimRight(baseURL, "/"),
 		apiKey:  apiKey,
 		http:    &http.Client{Timeout: 60 * time.Second},
+		upload:  &http.Client{Timeout: 10 * time.Minute},
 	}
 }
 
@@ -41,16 +45,39 @@ func NewClient(baseURL, apiKey string) *Client {
 type APIError struct {
 	Status int
 	Body   string
-	// Agent marks a response from the Agents API, whose status codes mean
-	// something different than the Integrations API's.
-	Agent bool
+	// API selects the status hints, because the same code means something
+	// different in each API.
+	API apiFamily
+}
+
+type apiFamily int
+
+const (
+	integrationsAPI apiFamily = iota
+	agentsAPI
+	knowledgeAPI
+)
+
+// familyOf classifies a request path relative to the base URL.
+func familyOf(path string) apiFamily {
+	p, _, _ := strings.Cut(path, "?")
+	switch {
+	case strings.HasPrefix(p, "/agent/v1/"):
+		return agentsAPI
+	case p == "/knowledge" || strings.HasPrefix(p, "/knowledge/"):
+		return knowledgeAPI
+	}
+	return integrationsAPI
 }
 
 func (e *APIError) Error() string {
 	msg := fmt.Sprintf("Langdock API returned %d", e.Status)
 	hint := statusHint(e.Status)
-	if e.Agent {
+	switch e.API {
+	case agentsAPI:
 		hint = agentStatusHint(e.Status)
+	case knowledgeAPI:
+		hint = knowledgeStatusHint(e.Status)
 	}
 	if hint != "" {
 		msg += " (" + hint + ")"
@@ -101,7 +128,31 @@ func agentStatusHint(status int) string {
 	return ""
 }
 
-var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key with the INTEGRATION_API scope (integration tools) and the Agent API scope (agent tools) in the MCP server's environment")
+// knowledgeStatusHint covers the Knowledge Folder API, where write operations
+// additionally need the Editor role on the knowledge base.
+func knowledgeStatusHint(status int) string {
+	switch status {
+	case http.StatusBadRequest:
+		return "invalid request, file validation failure, ineligible share target, or a change to the owner's access"
+	case http.StatusUnauthorized:
+		return "invalid or missing API key"
+	case http.StatusForbidden:
+		return "API key lacks the KNOWLEDGE_FOLDER_API scope, the knowledge base is not shared with it, or writes need the Editor role"
+	case http.StatusNotFound:
+		return "knowledge base, file or access target not found, or not shared with the API key"
+	case http.StatusRequestTimeout:
+		return "upload timed out"
+	case http.StatusRequestEntityTooLarge:
+		return "file exceeds the size limit (10 MB for text, Markdown, JSON and VTT, 30 MB for XML, 256 MB otherwise)"
+	case http.StatusTooManyRequests:
+		return "rate limit exceeded, retry later"
+	case http.StatusServiceUnavailable:
+		return "workspace storage capacity exceeded"
+	}
+	return ""
+}
+
+var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key with the INTEGRATION_API scope (integration tools), the Agent API scope (agent tools) and the KNOWLEDGE_FOLDER_API scope (knowledge tools) in the MCP server's environment")
 
 // doJSON sends body (if non-nil) as JSON and returns the raw response body.
 func (c *Client) doJSON(ctx context.Context, method, path string, body any) ([]byte, error) {
@@ -120,13 +171,22 @@ func (c *Client) doJSON(ctx context.Context, method, path string, body any) ([]b
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	return c.send(req)
+	return c.send(c.http, req, familyOf(path))
 }
 
-// uploadFile sends data as a single multipart/form-data file field.
-func (c *Client) uploadFile(ctx context.Context, method, path, field, filename, contentType string, data []byte) ([]byte, error) {
+// formField is a plain-text multipart field sent before the file.
+type formField struct{ name, value string }
+
+// uploadFile sends data as a multipart/form-data file field, preceded by
+// the given text fields.
+func (c *Client) uploadFile(ctx context.Context, method, path, field, filename, contentType string, data []byte, fields ...formField) ([]byte, error) {
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
+	for _, f := range fields {
+		if err := mw.WriteField(f.name, f.value); err != nil {
+			return nil, err
+		}
+	}
 	h := make(textproto.MIMEHeader)
 	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name=%q; filename=%q`, field, filename))
 	h.Set("Content-Type", contentType)
@@ -145,7 +205,7 @@ func (c *Client) uploadFile(ctx context.Context, method, path, field, filename, 
 		return nil, err
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
-	return c.send(req)
+	return c.send(c.upload, req, familyOf(path))
 }
 
 func (c *Client) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
@@ -161,8 +221,8 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body io.Re
 	return req, nil
 }
 
-func (c *Client) send(req *http.Request) ([]byte, error) {
-	resp, err := c.http.Do(req)
+func (c *Client) send(hc *http.Client, req *http.Request, api apiFamily) ([]byte, error) {
+	resp, err := hc.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +232,7 @@ func (c *Client) send(req *http.Request) ([]byte, error) {
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, &APIError{Status: resp.StatusCode, Body: strings.TrimSpace(string(body)), Agent: strings.Contains(req.URL.Path, "/agent/v1/")}
+		return nil, &APIError{Status: resp.StatusCode, Body: strings.TrimSpace(string(body)), API: api}
 	}
 	return body, nil
 }

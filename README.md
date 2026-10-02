@@ -1,6 +1,6 @@
 # langdock-mcp
 
-An MCP server that exposes Langdock's [Integrations API](https://docs.langdock.com/en/developer/integrations-api/integrations-overview) and the build endpoints of the [Agents API](https://docs.langdock.com/en/developer/agents-api/agents-overview) as tools. An MCP client such as Claude Code or Claude Desktop can use it to create and maintain custom Langdock integrations (actions, triggers, auth configuration, icon) and agents.
+An MCP server that exposes Langdock's [Integrations API](https://docs.langdock.com/en/developer/integrations-api/integrations-overview) and the build endpoints of the [Agents API](https://docs.langdock.com/en/developer/agents-api/agents-overview) and the [Knowledge Folder API](https://docs.langdock.com/en/developer/knowledge-folder-api/knowledge-folder-overview) as tools. An MCP client such as Claude Code or Claude Desktop can use it to create and maintain custom Langdock integrations (actions, triggers, auth configuration, icon), agents, and the files and sharing of knowledge bases.
 
 Langdock's own MCP server (`https://api.langdock.com/mcp`) only exposes workspace agents (`find_agent`, `ask_agent`). As of September 2026 there is no official MCP server for the Integrations API.
 
@@ -48,14 +48,38 @@ The API offers no endpoint to delete an integration.
 
 `create_agent` requires `model` (an `id` from `list_agent_models`), because a workspace may have no default model. The API cannot list agents or change who an agent is shared with; both are only possible in the Langdock UI.
 
+## Knowledge tools
+
+| Tool | Endpoint |
+|---|---|
+| `list_knowledge_bases` | `GET /knowledge` |
+| `update_knowledge_base` | `PATCH /knowledge/{folderId}/folder` |
+| `list_knowledge_files` | `GET /knowledge/{folderId}/list` |
+| `get_knowledge_file` | `GET /knowledge/{folderId}/{attachmentId}` |
+| `upload_knowledge_file` | `POST /knowledge/{folderId}` (multipart upload from a local file) |
+| `replace_knowledge_file` | `PATCH /knowledge/{folderId}` (multipart upload from a local file) |
+| `delete_knowledge_file` | `DELETE /knowledge/{folderId}/{attachmentId}` |
+| `search_knowledge` | `POST /knowledge/search` |
+| `grant_knowledge_access` | `POST /knowledge/{folderId}/access` |
+| `update_knowledge_access` | `PATCH /knowledge/{folderId}/access` |
+| `revoke_knowledge_access` | `DELETE /knowledge/{folderId}/access` |
+
+The API cannot create or delete knowledge bases; both are only possible in the Langdock Library. A knowledge base is visible to these tools once it is shared with the API key, and every write (rename, file changes, sharing) needs the Editor role on it.
+
+`list_knowledge_bases` only returns results for workspace API keys. Its ids are what `create_agent` and `update_agent` expect in `knowledgeFolderIds`.
+
+`upload_knowledge_file` and `replace_knowledge_file` read a local file from an absolute path on the machine running the server. They enforce the documented size limits before sending (10 MB for text, Markdown, JSON and VTT, 30 MB for XML, 256 MB for other documents) and set the MIME type from the file extension. Langdock processes the file asynchronously after the upload returns, so `get_knowledge_file` has to be polled until `syncStatus` is `SYNCED` or a failure status.
+
+`grant_knowledge_access` is all-or-nothing: if one target id is unknown or ineligible, nothing is granted. Groups can only be shared in the Langdock UI, and the owner's access cannot be changed or revoked.
+
 ## Configuration
 
 | Variable | Required | Description |
 |---|---|---|
-| `LANGDOCK_API_KEY` | yes | API key created by a workspace admin in the Langdock workspace settings. Integration tools need the `INTEGRATION_API` scope, agent tools the Agent API scope and access to the agent. |
+| `LANGDOCK_API_KEY` | yes | API key created by a workspace admin in the Langdock workspace settings. Integration tools need the `INTEGRATION_API` scope, agent tools the Agent API scope and access to the agent, knowledge tools the `KNOWLEDGE_FOLDER_API` scope and access to the knowledge base. |
 | `LANGDOCK_BASE_URL` | no | Defaults to `https://api.langdock.com`. Dedicated deployments use `https://<your-domain>/api/public`. |
 
-The key is checked lazily. A missing key produces a tool error on the first call, not a startup failure. A 401 or 403 from an agent tool says that the key may lack the Agent API scope.
+The key is checked lazily. A missing key produces a tool error on the first call, not a startup failure. A 401 or 403 from an agent tool says that the key may lack the Agent API scope. A 403 from a knowledge tool says that the key may lack the `KNOWLEDGE_FOLDER_API` scope, the knowledge base may not be shared with it, or the write may need the Editor role.
 
 ## Installation
 
