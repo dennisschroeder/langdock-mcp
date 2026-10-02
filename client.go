@@ -162,7 +162,7 @@ func knowledgeStatusHint(status int) string {
 	return ""
 }
 
-var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key with the INTEGRATION_API scope (integration tools), the Agent API scope (agent tools) and the KNOWLEDGE_FOLDER_API scope (knowledge tools) in the MCP server's environment")
+var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key with the INTEGRATION_API scope (integration tools), the Agent API scope (agent tools), the KNOWLEDGE_FOLDER_API scope (knowledge tools) and the WORKFLOW_API, WORKFLOW_WRITE_API and WORKFLOW_DELETE_API scopes (workflow tools) in the MCP server's environment")
 
 // doJSON sends body (if non-nil) as JSON and returns the raw response body.
 func (c *Client) doJSON(ctx context.Context, method, path string, body any) ([]byte, error) {

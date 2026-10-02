@@ -364,7 +364,7 @@ func withQuery(path string, q url.Values) string {
 func workflowStatusHint(status int) string {
 	switch status {
 	case http.StatusBadRequest:
-		return "invalid parameters, graph and metadata mixed in one update, nodes without edges, activating a workflow without a published version, or a draft that cannot be published (disconnected trigger, unauthenticated webhook)"
+		return "invalid parameters, graph and metadata mixed in one update, nodes without edges, activating a workflow without a published version, run filters with to earlier than from or a runMode that disagrees with version, or a draft that cannot be published (disconnected trigger, unauthenticated webhook)"
 	case http.StatusUnauthorized:
 		return "invalid or missing API key"
 	case http.StatusForbidden:

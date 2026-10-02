@@ -87,6 +87,16 @@ func TestWorkflowRemoveLimitsSendsNull(t *testing.T) {
 		t.Fatalf("duplicate removeLimits: %s", text)
 	}
 	assertJSONEqual(t, fake.last(t).Body, `{"workflowId":"`+testWorkflowID+`","limits":{"perRunCostUsd":null}}`)
+
+	args = map[string]any{"name": "W", "removeLimits": []any{"monthlyCostUsd"}}
+	if text, isErr := callTool(t, cs, "create_workflow", args); isErr {
+		t.Fatalf("create with removeLimits: %s", text)
+	}
+	req := fake.last(t)
+	if req.Method != "POST" || req.Path != "/workflows/v1/create" {
+		t.Fatalf("got %s %s", req.Method, req.Path)
+	}
+	assertJSONEqual(t, req.Body, `{"name":"W","limits":{"monthlyCostUsd":null}}`)
 }
 
 func TestWorkflowLocalValidation(t *testing.T) {
@@ -105,6 +115,7 @@ func TestWorkflowLocalValidation(t *testing.T) {
 		"fractionalExecutions": {"update_workflow", map[string]any{"workflowId": id, "limits": map[string]any{"maxExecutionsPerHour": 1.5}}},
 		"nothing":              {"update_workflow", map[string]any{"workflowId": id}},
 		"setAndRemove":         {"update_workflow", map[string]any{"workflowId": id, "limits": map[string]any{"perRunCostUsd": 2}, "removeLimits": []any{"perRunCostUsd"}}},
+		"createSetAndRemove":   {"create_workflow", map[string]any{"name": "W", "limits": map[string]any{"monthlyCostUsd": 30}, "removeLimits": []any{"monthlyCostUsd"}}},
 		"triggerAndGraph":      {"create_workflow", map[string]any{"name": "W", "initialTriggerKind": "manual", "nodes": []any{}, "edges": []any{}}},
 		"edgesWithoutNodes":    {"create_workflow", map[string]any{"name": "W", "edges": []any{}}},
 		"fromWithoutTo":        {"list_workflow_runs", map[string]any{"workflowId": id, "from": "2026-09-01"}},
