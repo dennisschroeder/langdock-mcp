@@ -72,6 +72,14 @@ The API cannot create or delete knowledge bases; both are only possible in the L
 
 `grant_knowledge_access` is all-or-nothing: if one target id is unknown or ineligible, nothing is granted. Groups can only be shared in the Langdock UI, and the owner's access cannot be changed or revoked.
 
+## Usage export tools
+
+| Tool | Endpoint |
+|---|---|
+| `export_usage` | `POST /export/{dataType}/json` or `/csv` (`dataType`: `users`, `agents`, `api-keys`, `projects`, `models`, `workflows`) |
+
+`export_usage` needs an API key with the `USAGE_EXPORT_API` scope, which only workspace admins can grant and which exposes usage data of the whole workspace. `format: json` (the default) returns the rows inline; `format: csv` returns a signed download URL, which suits exports beyond the server's 10 MB response limit. `group_by` accepts `model` for users, agents and API keys, `source` or `deployment` (BYOK only) for models, and nothing for projects and workflows. One request scans at most 1,000,000 usage rows, so long periods have to be split.
+
 ## Configuration
 
 | Variable | Required | Description |
