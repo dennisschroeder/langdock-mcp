@@ -1,10 +1,10 @@
 # langdock-mcp
 
-An MCP server that exposes Langdock's [Integrations API](https://docs.langdock.com/en/developer/integrations-api/integrations-overview) as tools, so an MCP client such as Claude Code or Claude Desktop can create and maintain custom Langdock integrations, including their actions, triggers, auth configuration and icon.
+An MCP server that exposes Langdock's [Integrations API](https://docs.langdock.com/en/developer/integrations-api/integrations-overview) and the build endpoints of the [Agents API](https://docs.langdock.com/en/developer/agents-api/agents-overview) as tools. An MCP client such as Claude Code or Claude Desktop can use it to create and maintain custom Langdock integrations (actions, triggers, auth configuration, icon) and agents.
 
 Langdock's own MCP server (`https://api.langdock.com/mcp`) only exposes workspace agents (`find_agent`, `ask_agent`). As of September 2026 there is no official MCP server for the Integrations API.
 
-## Tools
+## Integration tools
 
 | Tool | Endpoint |
 |---|---|
@@ -28,14 +28,34 @@ Tool input schemas carry the documented enums and length limits, so invalid inpu
 
 The API offers no endpoint to delete an integration.
 
+## Agent tools
+
+| Tool | Endpoint |
+|---|---|
+| `get_agent` | `GET /agent/v1/get?agentId=…` |
+| `list_agent_models` | `GET /agent/v1/models` |
+| `create_agent` | `POST /agent/v1/create` |
+| `update_agent` | `PATCH /agent/v1/update` |
+| `publish_agent` | `POST /agent/v1/publish` |
+| `add_agent_actions` | `GET /agent/v1/get`, then `PATCH /agent/v1/update` with the merged action list |
+| `remove_agent_actions` | `GET /agent/v1/get`, then `PATCH /agent/v1/update` with the remaining actions |
+
+`create_agent` and `update_agent` only change the agent's draft. Users see the change once the draft is published, either with `publish_agent` or with `publish: true` (and an optional `publishDescription`) on the write itself. `publish_agent` returns 409 when the draft has no changes.
+
+`update_agent` sends only the fields the caller passes, which the API applies as a partial update. Array fields (`conversationStarters`, `actions`, `inputFields`, `attachments`, `knowledgeFolderIds`) replace the whole list, and `[]` empties it. Empty strings clear `description` and `instruction`, and `clearEmoji` removes the emoji. The tool deliberately does not read before writing, because `get_agent` returns the published version and would overwrite unpublished draft changes.
+
+`add_agent_actions` and `remove_agent_actions` change single actions without resending the list by hand. They read the current list via `get_agent` and therefore start from the published version. Action changes that exist only in the draft are lost. Existing action entries are resent unchanged, including properties the docs do not describe, such as a non-null `connectionId`; null-valued properties are dropped. `remove_agent_actions` writes nothing if one of the ids is not on the agent.
+
+`create_agent` requires `model` (an `id` from `list_agent_models`), because a workspace may have no default model. The API cannot list agents or change who an agent is shared with; both are only possible in the Langdock UI.
+
 ## Configuration
 
 | Variable | Required | Description |
 |---|---|---|
-| `LANGDOCK_API_KEY` | yes | API key with the `INTEGRATION_API` scope, created by a workspace admin in the Langdock workspace settings |
+| `LANGDOCK_API_KEY` | yes | API key created by a workspace admin in the Langdock workspace settings. Integration tools need the `INTEGRATION_API` scope, agent tools the Agent API scope and access to the agent. |
 | `LANGDOCK_BASE_URL` | no | Defaults to `https://api.langdock.com`. Dedicated deployments use `https://<your-domain>/api/public`. |
 
-The key is checked lazily. A missing key produces a tool error on the first call, not a startup failure.
+The key is checked lazily. A missing key produces a tool error on the first call, not a startup failure. A 401 or 403 from an agent tool says that the key may lack the Agent API scope.
 
 ## Installation
 
