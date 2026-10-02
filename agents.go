@@ -123,7 +123,7 @@ type AgentOutput struct {
 
 type ChatWithAgentInput struct {
 	AgentID  string         `json:"agentId" jsonschema:"UUID of an agent shared with the API key"`
-	Messages []AgentMessage `json:"messages" jsonschema:"conversation so far in Vercel AI SDK UIMessage format, ending with the user's message; resend earlier turns for follow-ups, because the API keeps no conversation state"`
+	Messages []AgentMessage `json:"messages" jsonschema:"conversation so far in Vercel AI SDK UIMessage format, ending with the user's message (the API silently drops a trailing non-user message); resend earlier turns for follow-ups, because the API keeps no conversation state"`
 	Output   *AgentOutput   `json:"output,omitempty" jsonschema:"request structured output, returned in the response's output field"`
 	MaxSteps int            `json:"maxSteps,omitempty" jsonschema:"maximum tool execution steps, 1-20"`
 	// ImageResponseFormat matters because b64_json images can push the reply
@@ -259,6 +259,9 @@ func (s *Server) disableAgent(ctx context.Context, _ *mcp.CallToolRequest, in Di
 }
 
 func (s *Server) chatWithAgent(ctx context.Context, _ *mcp.CallToolRequest, in ChatWithAgentInput) (*mcp.CallToolResult, any, error) {
+	if last := in.Messages[len(in.Messages)-1]; last.Role != "user" {
+		return nil, nil, fmt.Errorf("the last message must have role user, got %q; Langdock drops a trailing non-user message and would answer the previous turn again", last.Role)
+	}
 	msgs := make([]AgentMessage, len(in.Messages))
 	for i, m := range in.Messages {
 		if m.ID == "" {

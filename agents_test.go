@@ -276,6 +276,7 @@ func TestChatWithAgentRejectsInvalidInput(t *testing.T) {
 		"bad role":      {"agentId": testAgentID, "messages": []any{map[string]any{"role": "tool", "parts": text}}},
 		"untyped part":  {"agentId": testAgentID, "messages": []any{map[string]any{"role": "user", "parts": []any{map[string]any{"text": "Hi"}}}}},
 		"null messages": {"agentId": testAgentID, "messages": nil},
+		"last not user": {"agentId": testAgentID, "messages": []any{map[string]any{"role": "user", "parts": text}, map[string]any{"role": "assistant", "parts": text}}},
 		"null parts":    {"agentId": testAgentID, "messages": []any{map[string]any{"role": "user", "parts": nil}}},
 		"output type":   {"agentId": testAgentID, "messages": []any{map[string]any{"role": "user", "parts": text}}, "output": map[string]any{"type": "string"}},
 		"image format":  {"agentId": testAgentID, "messages": []any{map[string]any{"role": "user", "parts": text}}, "imageResponseFormat": "png"},
