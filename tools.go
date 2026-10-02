@@ -156,7 +156,7 @@ type TriggerRef struct {
 	TriggerID     string `json:"triggerId" jsonschema:"UUID of the trigger"`
 }
 
-// Server exposes the Integrations and Agents APIs as MCP tools.
+// Server exposes the Integrations, Agents and Knowledge Folder APIs as MCP tools.
 type Server struct {
 	client *Client
 	mcp    *mcp.Server
@@ -281,6 +281,7 @@ func (s *Server) register() {
 	}, s.deleteTrigger)
 
 	s.registerAgents()
+	s.registerKnowledge()
 }
 
 func actionSchema(sc *jsonschema.Schema) {
