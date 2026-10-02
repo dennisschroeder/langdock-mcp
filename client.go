@@ -56,6 +56,7 @@ const (
 	integrationsAPI apiFamily = iota
 	agentsAPI
 	knowledgeAPI
+	auditLogsAPI
 )
 
 // familyOf classifies a request path relative to the base URL.
@@ -66,6 +67,8 @@ func familyOf(path string) apiFamily {
 		return agentsAPI
 	case p == "/knowledge" || strings.HasPrefix(p, "/knowledge/"):
 		return knowledgeAPI
+	case strings.HasPrefix(p, "/audit-logs/"):
+		return auditLogsAPI
 	}
 	return integrationsAPI
 }
@@ -78,6 +81,8 @@ func (e *APIError) Error() string {
 		hint = agentStatusHint(e.Status)
 	case knowledgeAPI:
 		hint = knowledgeStatusHint(e.Status)
+	case auditLogsAPI:
+		hint = auditLogStatusHint(e.Status)
 	}
 	if hint != "" {
 		msg += " (" + hint + ")"
@@ -152,7 +157,23 @@ func knowledgeStatusHint(status int) string {
 	return ""
 }
 
-var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key with the INTEGRATION_API scope (integration tools), the Agent API scope (agent tools) and the KNOWLEDGE_FOLDER_API scope (knowledge tools) in the MCP server's environment")
+// auditLogStatusHint covers the Audit Logs API, whose key scope is tied to a
+// single workspace.
+func auditLogStatusHint(status int) string {
+	switch status {
+	case http.StatusBadRequest:
+		return "invalid parameters, e.g. a malformed date or UUID"
+	case http.StatusUnauthorized:
+		return "invalid or missing API key"
+	case http.StatusForbidden:
+		return "API key lacks the AUDIT_LOG_API scope, or workspace_id is not the API key's workspace"
+	case http.StatusTooManyRequests:
+		return "rate limit of 500 requests/minute exceeded, retry later"
+	}
+	return ""
+}
+
+var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key with the INTEGRATION_API scope (integration tools), the Agent API scope (agent tools), the KNOWLEDGE_FOLDER_API scope (knowledge tools) and the AUDIT_LOG_API scope (audit log tools) in the MCP server's environment")
 
 // doJSON sends body (if non-nil) as JSON and returns the raw response body.
 func (c *Client) doJSON(ctx context.Context, method, path string, body any) ([]byte, error) {

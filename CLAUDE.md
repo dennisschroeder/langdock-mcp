@@ -14,9 +14,9 @@ gofmt -l .                          # must print nothing
 
 ## Architecture
 
-Single package: `main.go` (wiring from env) → `client.go` (`Client`, a thin HTTP wrapper returning raw response bodies and `*APIError` for non-2xx) → `tools.go` (Integrations API: input structs, tool registration, handlers, shared schema helpers) `agents.go` (Agents API) and `knowledge.go` (Knowledge Folder API), the latter two registered from `register()`. The go-sdk owns the protocol, and tool input schemas are inferred from the input structs, then patched by `schemaFor` with enums and `maxLength` values that struct tags cannot express. Tool inputs deliberately use the API's camelCase field names so they match the Langdock docs one-to-one.
+Single package: `main.go` (wiring from env) → `client.go` (`Client`, a thin HTTP wrapper returning raw response bodies and `*APIError` for non-2xx) → `tools.go` (Integrations API: input structs, tool registration, handlers, shared schema helpers) `agents.go` (Agents API), `knowledge.go` (Knowledge Folder API) and `audit_logs.go` (Audit Logs API), the latter three registered from `register()`. The go-sdk owns the protocol, and tool input schemas are inferred from the input structs, then patched by `schemaFor` with enums and `maxLength` values that struct tags cannot express. Tool inputs deliberately use the API's field names (camelCase, snake_case for the Audit Logs API) so they match the Langdock docs one-to-one.
 
-Handlers return Langdock's JSON response verbatim as text. A returned Go error becomes a tool-level error (`IsError`) the model can read. `APIError` adds a hint per documented status code and picks the hints per API family, which `familyOf` derives from the request path relative to the base URL (`/agent/v1/` for the Agents API, `/knowledge` for the Knowledge Folder API, everything else for the Integrations API).
+Handlers return Langdock's JSON response verbatim as text. A returned Go error becomes a tool-level error (`IsError`) the model can read. `APIError` adds a hint per documented status code and picks the hints per API family, which `familyOf` derives from the request path relative to the base URL (`/agent/v1/` for the Agents API, `/knowledge` for the Knowledge Folder API, `/audit-logs/` for the Audit Logs API, everything else for the Integrations API).
 
 ## Invariants
 
@@ -27,7 +27,7 @@ Handlers return Langdock's JSON response verbatim as text. A returned Go error b
 - Multipart uploads (knowledge files and the integration icon) go through a separate `http.Client` with a 10-minute timeout, because knowledge files may be up to 256 MB. Their MIME type comes from the explicit extension map `knowledgeMIMETypes`, because content sniffing reports Office files as `application/zip`, which Langdock rejects.
 - Never log or echo the API key.
 - `serverVersion` is a `var` because GoReleaser sets it from the tag via `-ldflags -X main.serverVersion=…`. Keep its default in step with the latest tag.
-- Endpoint paths, methods and field limits come from https://docs.langdock.com/en/developer/integrations-api/, https://docs.langdock.com/en/developer/agents-api/ and https://docs.langdock.com/en/developer/knowledge-folder-api/ (index at https://docs.langdock.com/llms.txt). Re-check there before changing them.
+- Endpoint paths, methods and field limits come from https://docs.langdock.com/en/developer/integrations-api/, https://docs.langdock.com/en/developer/agents-api/, https://docs.langdock.com/en/developer/knowledge-folder-api/ and https://docs.langdock.com/en/developer/audit-logs-api/ (index at https://docs.langdock.com/llms.txt). Re-check there before changing them.
 
 ## Gotchas
 
