@@ -1,0 +1,58 @@
+version: 2
+
+builds:
+  - binary: langdock-mcp
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.serverVersion={{.Version}}
+
+archives:
+  - formats: [tar.gz]
+    name_template: >-
+      langdock-mcp_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: "langdock-mcp_{{ .Version }}_checksums.txt"
+  algorithm: sha256
+
+homebrew_casks:
+  - repository:
+      owner: dennisschroeder
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Casks
+    homepage: https://github.com/dennisschroeder/langdock-mcp
+    description: MCP server for the Langdock Integrations and Agents APIs
+    license: MIT
+    # The binary is not notarized, so Gatekeeper would refuse to run it.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/langdock-mcp"]
+          end
+
+changelog:
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Other
+      order: 999
+
+release:
+  github: {}

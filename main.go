@@ -2,11 +2,16 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "--version" {
+		fmt.Println(serverVersion)
+		return
+	}
 	// The API key is validated lazily per tool call so a missing key surfaces
 	// as a readable tool error in the client instead of a dead server.
 	client := NewClient(os.Getenv("LANGDOCK_BASE_URL"), os.Getenv("LANGDOCK_API_KEY"))
