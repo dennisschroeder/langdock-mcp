@@ -72,11 +72,28 @@ The API cannot create or delete knowledge bases; both are only possible in the L
 
 `grant_knowledge_access` is all-or-nothing: if one target id is unknown or ineligible, nothing is granted. Groups can only be shared in the Langdock UI, and the owner's access cannot be changed or revoked.
 
+## Prompt tools
+
+| Tool | Endpoint |
+|---|---|
+| `list_prompts` | `GET /prompts/v1` |
+| `create_prompt` | `POST /prompts/v1` |
+| `get_prompt` | `GET /prompts/v1/{promptId}` |
+| `update_prompt` | `PATCH /prompts/v1/{promptId}` |
+| `delete_prompt` | `DELETE /prompts/v1/{promptId}` |
+| `list_prompt_folders` | `GET /prompts/v1/folders` |
+| `create_prompt_folder` | `POST /prompts/v1/folders` |
+| `get_prompt_folder` | `GET /prompts/v1/folders/{folderId}` |
+| `update_prompt_folder` | `PATCH /prompts/v1/folders/{folderId}` |
+| `delete_prompt_folder` | `DELETE /prompts/v1/folders/{folderId}` |
+
+The Prompt Library API acts with the permissions of the API key's owner. `update_prompt` and `update_prompt_folder` send only the fields the caller passes, which the API applies as a partial update. `clearPromptFolderId` takes a prompt out of its folder and `clearSharedWithGroupId` stops sharing a folder with its group. A prompt cannot be in a folder and shared with the workspace at the same time, and a folder cannot be shared with the workspace and a group at the same time. `delete_prompt_folder` also deletes every prompt in the folder.
+
 ## Configuration
 
 | Variable | Required | Description |
 |---|---|---|
-| `LANGDOCK_API_KEY` | yes | API key created by a workspace admin in the Langdock workspace settings. Integration tools need the `INTEGRATION_API` scope, agent tools the Agent API scope and access to the agent, knowledge tools the `KNOWLEDGE_FOLDER_API` scope and access to the knowledge base. |
+| `LANGDOCK_API_KEY` | yes | API key created by a workspace admin in the Langdock workspace settings. Integration tools need the `INTEGRATION_API` scope, agent tools the Agent API scope and access to the agent, knowledge tools the `KNOWLEDGE_FOLDER_API` scope and access to the knowledge base, prompt tools the `PROMPT_API` scope. |
 | `LANGDOCK_BASE_URL` | no | Defaults to `https://api.langdock.com`. Dedicated deployments use `https://<your-domain>/api/public`. |
 
 The key is checked lazily. A missing key produces a tool error on the first call, not a startup failure. A 401 or 403 from an agent tool says that the key may lack the Agent API scope. A 403 from a knowledge tool says that the key may lack the `KNOWLEDGE_FOLDER_API` scope, the knowledge base may not be shared with it, or the write may need the Editor role.

@@ -56,6 +56,7 @@ const (
 	integrationsAPI apiFamily = iota
 	agentsAPI
 	knowledgeAPI
+	promptsAPI
 )
 
 // familyOf classifies a request path relative to the base URL.
@@ -66,6 +67,8 @@ func familyOf(path string) apiFamily {
 		return agentsAPI
 	case p == "/knowledge" || strings.HasPrefix(p, "/knowledge/"):
 		return knowledgeAPI
+	case p == "/prompts/v1" || strings.HasPrefix(p, "/prompts/v1/"):
+		return promptsAPI
 	}
 	return integrationsAPI
 }
@@ -78,6 +81,8 @@ func (e *APIError) Error() string {
 		hint = agentStatusHint(e.Status)
 	case knowledgeAPI:
 		hint = knowledgeStatusHint(e.Status)
+	case promptsAPI:
+		hint = promptStatusHint(e.Status)
 	}
 	if hint != "" {
 		msg += " (" + hint + ")"
@@ -152,7 +157,7 @@ func knowledgeStatusHint(status int) string {
 	return ""
 }
 
-var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key with the INTEGRATION_API scope (integration tools), the Agent API scope (agent tools) and the KNOWLEDGE_FOLDER_API scope (knowledge tools) in the MCP server's environment")
+var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key with the INTEGRATION_API scope (integration tools), the Agent API scope (agent tools) the KNOWLEDGE_FOLDER_API scope (knowledge tools) and the PROMPT_API scope (prompt tools) in the MCP server's environment")
 
 // doJSON sends body (if non-nil) as JSON and returns the raw response body.
 func (c *Client) doJSON(ctx context.Context, method, path string, body any) ([]byte, error) {
