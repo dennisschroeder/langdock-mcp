@@ -24,7 +24,8 @@ type Client struct {
 	baseURL string
 	apiKey  string
 	http    *http.Client
-	// upload has a longer timeout because knowledge files may be up to 256 MB.
+	// upload has a longer timeout because knowledge files may be up to 256 MB
+	// and agent completions may run for up to 100 seconds.
 	upload *http.Client
 }
 
@@ -62,6 +63,7 @@ const (
 	workflowExportAPI
 	scheduledTasksAPI
 	auditLogsAPI
+	attachmentsAPI
 )
 
 // familyOf classifies a request path relative to the base URL.
@@ -86,6 +88,8 @@ func familyOf(path string) apiFamily {
 		return scheduledTasksAPI
 	case strings.HasPrefix(p, "/audit-logs/"):
 		return auditLogsAPI
+	case strings.HasPrefix(p, "/attachment/v1/"):
+		return attachmentsAPI
 	}
 	return integrationsAPI
 }
@@ -112,6 +116,8 @@ func (e *APIError) Error() string {
 		hint = scheduledTaskStatusHint(e.Status)
 	case auditLogsAPI:
 		hint = auditLogStatusHint(e.Status)
+	case attachmentsAPI:
+		hint = attachmentStatusHint(e.Status)
 	}
 	if hint != "" {
 		msg += " (" + hint + ")"
@@ -147,17 +153,19 @@ func statusHint(status int) string {
 func agentStatusHint(status int) string {
 	switch status {
 	case http.StatusBadRequest:
-		return "invalid parameters, or a referenced model, action, attachment or folder does not exist in the workspace"
+		return "invalid parameters or message format, a referenced model, action, attachment or folder does not exist in the workspace, or the agent is not shared with the API key"
 	case http.StatusUnauthorized:
 		return "invalid or missing API key, or the key lacks the Agent API scope"
 	case http.StatusForbidden:
-		return "API key lacks the Agent API scope or has no (edit) access to this agent"
+		return "API key lacks the Agent API scope or has no (edit) access to this agent; disabling agents needs admin rights"
 	case http.StatusNotFound:
 		return "agent not found or not shared with the API key"
 	case http.StatusConflict:
 		return "the draft has no changes to publish"
 	case http.StatusTooManyRequests:
 		return "rate limit exceeded, retry later"
+	case 524:
+		return "the completion ran longer than Langdock's 100-second limit for non-streaming requests; lower maxSteps or split the task"
 	}
 	return ""
 }
@@ -190,7 +198,7 @@ var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key 
 	"INTEGRATION_API (integration tools)",
 	"the Agent API scope (agent tools)",
 	"AUDIT_LOG_API (audit log tools)",
-	"KNOWLEDGE_FOLDER_API (knowledge tools)",
+	"KNOWLEDGE_FOLDER_API (knowledge and attachment tools)",
 	"PROMPT_API (prompt tools)",
 	"AUTOMATION_API (scheduled task tools)",
 	"USAGE_EXPORT_API (export_usage)",
@@ -200,6 +208,15 @@ var errNoAPIKey = errors.New("LANGDOCK_API_KEY is not set; configure an API key 
 
 // doJSON sends body (if non-nil) as JSON and returns the raw response body.
 func (c *Client) doJSON(ctx context.Context, method, path string, body any) ([]byte, error) {
+	return c.doJSONVia(c.http, ctx, method, path, body)
+}
+
+// doJSONSlow is doJSON with the upload client's longer timeout.
+func (c *Client) doJSONSlow(ctx context.Context, method, path string, body any) ([]byte, error) {
+	return c.doJSONVia(c.upload, ctx, method, path, body)
+}
+
+func (c *Client) doJSONVia(hc *http.Client, ctx context.Context, method, path string, body any) ([]byte, error) {
 	var r io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -215,7 +232,7 @@ func (c *Client) doJSON(ctx context.Context, method, path string, body any) ([]b
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	return c.send(c.http, req, familyOf(path))
+	return c.send(hc, req, familyOf(path))
 }
 
 // formField is a plain-text multipart field sent before the file.

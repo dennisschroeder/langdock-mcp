@@ -20,9 +20,10 @@ var (
 	knowledgeTargetTypes = []string{"USER", "API_KEY"}
 )
 
-// knowledgeMIMETypes covers the documented file types, because
-// mime.TypeByExtension depends on the host's mime.types and sniffing reports
-// Office files as application/zip, which Langdock's validation rejects.
+// knowledgeMIMETypes covers the documented knowledge file types plus the
+// spreadsheet types attachments accept, because mime.TypeByExtension depends
+// on the host's mime.types and sniffing reports Office files as
+// application/zip, which Langdock's validation rejects.
 var knowledgeMIMETypes = map[string]string{
 	".pdf":  "application/pdf",
 	".doc":  "application/msword",
@@ -39,6 +40,9 @@ var knowledgeMIMETypes = map[string]string{
 	".json": "application/json",
 	".xml":  "application/xml",
 	".vtt":  "text/vtt",
+	".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+	".xls":  "application/vnd.ms-excel",
+	".csv":  "text/csv",
 }
 
 type ListKnowledgeBasesInput struct {
@@ -270,21 +274,7 @@ func (s *Server) replaceKnowledgeFile(ctx context.Context, _ *mcp.CallToolReques
 }
 
 func (s *Server) sendKnowledgeFile(ctx context.Context, method, folderID, filePath string, fields []formField) (*mcp.CallToolResult, any, error) {
-	if !filepath.IsAbs(filePath) {
-		return nil, nil, fmt.Errorf("filePath must be absolute, got %q", filePath)
-	}
-	info, err := os.Stat(filePath)
-	if err != nil {
-		return nil, nil, err
-	}
-	if !info.Mode().IsRegular() {
-		return nil, nil, fmt.Errorf("%s is not a regular file", filePath)
-	}
-	ext := strings.ToLower(filepath.Ext(filePath))
-	if limit := knowledgeFileLimit(ext); info.Size() > limit {
-		return nil, nil, fmt.Errorf("%s is %d bytes, the limit for %s files is %d MB", filePath, info.Size(), ext, limit>>20)
-	}
-	data, err := os.ReadFile(filePath)
+	data, ext, err := readUploadFile(filePath, knowledgeFileLimit)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -293,6 +283,28 @@ func (s *Server) sendKnowledgeFile(ctx context.Context, method, folderID, filePa
 		return nil, nil, err
 	}
 	return textResult(body), nil, nil
+}
+
+// readUploadFile reads a local file for a multipart upload and checks its size
+// against limit(ext) before reading, so an oversized file fails before its
+// bytes are sent.
+func readUploadFile(filePath string, limit func(ext string) int64) ([]byte, string, error) {
+	if !filepath.IsAbs(filePath) {
+		return nil, "", fmt.Errorf("filePath must be absolute, got %q", filePath)
+	}
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return nil, "", err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, "", fmt.Errorf("%s is not a regular file", filePath)
+	}
+	ext := strings.ToLower(filepath.Ext(filePath))
+	if max := limit(ext); info.Size() > max {
+		return nil, "", fmt.Errorf("%s is %d bytes, the limit for %s files is %d MB", filePath, info.Size(), ext, max>>20)
+	}
+	data, err := os.ReadFile(filePath)
+	return data, ext, err
 }
 
 // knowledgeFileLimit mirrors the documented per-type upload limits so an

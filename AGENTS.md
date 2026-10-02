@@ -17,6 +17,7 @@ gofmt -l .                          # must print nothing
 Single package: `main.go` (wiring from env) → `client.go` (`Client`, a thin HTTP wrapper returning raw response bodies and `*APIError` for non-2xx) → `tools.go` (Integrations API: input structs, tool registration, handlers, shared schema helpers). Every other API lives in its own file, registered from `register()`:
 
 - `agents.go`: Agents API
+- `attachments.go`: attachment endpoints of the Agents API (`/attachment/v1/`, `KNOWLEDGE_FOLDER_API` scope)
 - `audit_logs.go`: Audit Logs API
 - `knowledge.go`: Knowledge Folder API
 - `prompts.go`: Prompt Library API
@@ -40,11 +41,12 @@ Handlers return Langdock's JSON response verbatim as text. A returned Go error b
 - Prompt and prompt folder path ids are validated as UUIDs, because a non-UUID id such as `folders` addresses a different route under `/prompts/v1`.
 - `update_workflow` must stay a plain pass-through PATCH. The docs state that omitted `limits` fields stay unchanged and treat the endpoint as a partial update (a body with no fields is a 400), so omitted metadata is assumed unchanged too; graph writes only touch the draft graph (version `0`), never `activeVersion`. `nodes` and `edges` replace the whole draft, so both are required together. The API rejects metadata and graph changes in one request, and the tool rejects them locally rather than splitting them into two non-atomic writes. Removing a limit needs an explicit `null`, which `removeLimits` sends.
 - `delete_workflow` is permanent and has no confirmation parameter; its description must keep saying so.
-- Multipart uploads (knowledge files and the integration icon) go through a separate `http.Client` with a 10-minute timeout, because knowledge files may be up to 256 MB. Their MIME type comes from the explicit extension map `knowledgeMIMETypes`, because content sniffing reports Office files as `application/zip`, which Langdock rejects.
+- Multipart uploads (knowledge files, attachments and the integration icon) go through a separate `http.Client` with a 10-minute timeout, because knowledge files may be up to 256 MB. Their MIME type comes from the explicit extension map `knowledgeMIMETypes`, because content sniffing reports Office files as `application/zip`, which Langdock rejects.
 - `export_usage` always calls the explicit `/json` or `/csv` route, never the format-less default, and both return a JSON envelope (rows, or a signed download URL). `group_by` is validated per `dataType` locally against `usageGroupBy`, because the schema enum cannot express the dependency. Its field name stays snake_case because the API uses `group_by`.
 - `Client.send` fails with `errResponseTooLarge` instead of truncating bodies over 10 MB, because a cut-off body would reach the model as broken JSON.
 - Usage Export API endpoints come from https://docs.langdock.com/en/developer/usage-export-api/intro-to-usage-export-api.md.
 - `invite_users` sends emails and `update_user_role` / `deactivate_user` change access, so their descriptions must keep stating those side effects. The role enum is lowercase because the API rejects other casing.
+- `chat_with_agent` is non-streaming only, because handlers return the response verbatim as text. It uses the upload client capped at 2 minutes, because Langdock lets non-streaming completions run for 100 seconds, beyond the default 60-second timeout. The non-streaming reply carries a `content` string, which a follow-up resends as a text part; message parts are open maps, so parts from streaming clients (reasoning, tool-*, source-*) also pass through unchanged. Inline agent configs are not offered, since the docs say their `attachmentIds` do not work and the agent tools already build agents.
 - Never log or echo the API key.
 - `serverVersion` is a `var` because GoReleaser sets it from the tag via `-ldflags -X main.serverVersion=…`. Keep its default in step with the latest tag.
 - Endpoint paths, methods and field limits come from the Langdock docs (index at https://docs.langdock.com/llms.txt). Re-check there before changing them:

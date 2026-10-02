@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -218,5 +219,107 @@ func TestAgentAuthErrorsNameAgentScope(t *testing.T) {
 		if !isErr || !strings.Contains(text, "Agent API scope") || !strings.Contains(text, "denied") {
 			t.Errorf("%d: got %v %q", status, isErr, text)
 		}
+	}
+}
+
+func TestDisableAgent(t *testing.T) {
+	cs, fake := connect(t, "k", nil)
+	if text, isErr := callTool(t, cs, "disable_agent", map[string]any{"agentId": testAgentID, "disabled": false}); isErr {
+		t.Fatalf("tool error: %s", text)
+	}
+	req := fake.last(t)
+	if req.Method != "PATCH" || req.Path != "/agent/v1/disable" {
+		t.Errorf("got %s %s", req.Method, req.Path)
+	}
+	assertJSONEqual(t, req.Body, `{"agentId":"`+testAgentID+`","disabled":false}`)
+}
+
+func TestChatWithAgent(t *testing.T) {
+	cs, fake := connect(t, "k", map[string]fakeResponse{
+		"POST /agent/v1/chat/completions": {http.StatusOK, `{"messages":[{"id":"r1","role":"assistant","content":"Hi"}]}`},
+	})
+	args := map[string]any{
+		"agentId": testAgentID,
+		"messages": []any{
+			map[string]any{"role": "user", "parts": []any{map[string]any{"type": "text", "text": "Hello"}}},
+			map[string]any{"id": "m2", "role": "user", "parts": []any{map[string]any{"type": "text", "text": "Summarize"}},
+				"metadata": map[string]any{"attachments": []any{testAgentID}}},
+		},
+		"output":   map[string]any{"type": "enum", "enum": []any{"yes", "no"}},
+		"maxSteps": 3,
+	}
+	text, isErr := callTool(t, cs, "chat_with_agent", args)
+	if isErr || !strings.Contains(text, `"content":"Hi"`) {
+		t.Fatalf("got %v %s", isErr, text)
+	}
+	var sent struct {
+		Messages []map[string]any `json:"messages"`
+	}
+	body := fake.last(t).Body
+	if err := json.Unmarshal(body, &sent); err != nil {
+		t.Fatal(err)
+	}
+	id, _ := sent.Messages[0]["id"].(string)
+	if !strings.HasPrefix(id, "msg-") || len(id) != 20 {
+		t.Errorf("generated id %q", id)
+	}
+	assertJSONEqual(t, []byte(strings.Replace(string(body), id, "GEN", 1)), `{"agentId":"`+testAgentID+`","stream":false,"maxSteps":3,
+		"output":{"type":"enum","enum":["yes","no"]},
+		"messages":[{"id":"GEN","role":"user","parts":[{"type":"text","text":"Hello"}]},
+			{"id":"m2","role":"user","parts":[{"type":"text","text":"Summarize"}],"metadata":{"attachments":["`+testAgentID+`"]}}]}`)
+}
+
+func TestChatWithAgentRejectsInvalidInput(t *testing.T) {
+	text := []any{map[string]any{"type": "text", "text": "Hi"}}
+	for name, args := range map[string]map[string]any{
+		"no messages":   {"agentId": testAgentID, "messages": []any{}},
+		"bad role":      {"agentId": testAgentID, "messages": []any{map[string]any{"role": "tool", "parts": text}}},
+		"untyped part":  {"agentId": testAgentID, "messages": []any{map[string]any{"role": "user", "parts": []any{map[string]any{"text": "Hi"}}}}},
+		"null messages": {"agentId": testAgentID, "messages": nil},
+		"last not user": {"agentId": testAgentID, "messages": []any{map[string]any{"role": "user", "parts": text}, map[string]any{"role": "assistant", "parts": text}}},
+		"null parts":    {"agentId": testAgentID, "messages": []any{map[string]any{"role": "user", "parts": nil}}},
+		"output type":   {"agentId": testAgentID, "messages": []any{map[string]any{"role": "user", "parts": text}}, "output": map[string]any{"type": "string"}},
+		"image format":  {"agentId": testAgentID, "messages": []any{map[string]any{"role": "user", "parts": text}}, "imageResponseFormat": "png"},
+		"maxSteps":      {"agentId": testAgentID, "messages": []any{map[string]any{"role": "user", "parts": text}}, "maxSteps": 21},
+		"bad agentId":   {"agentId": "x", "messages": []any{map[string]any{"role": "user", "parts": text}}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cs, fake := connect(t, "k", nil)
+			if _, isErr := callTool(t, cs, "chat_with_agent", args); !isErr {
+				t.Fatal("expected validation error")
+			}
+			if len(fake.requests) != 0 {
+				t.Fatal("invalid input reached the API")
+			}
+		})
+	}
+}
+
+// A follow-up resends the earlier assistant reply with its reasoning and tool
+// parts, which must pass through unchanged.
+func TestChatWithAgentResendsHistory(t *testing.T) {
+	cs, fake := connect(t, "k", nil)
+	msgs := []any{
+		map[string]any{"id": "s", "role": "system", "parts": []any{map[string]any{"type": "text", "text": "Be brief"}}},
+		map[string]any{"id": "u1", "role": "user", "parts": []any{map[string]any{"type": "file", "mediaType": "application/pdf", "url": "https://example.com/a.pdf", "filename": "a.pdf"}}},
+		map[string]any{"id": "a1", "role": "assistant", "parts": []any{
+			map[string]any{"type": "reasoning", "text": "Reading"},
+			map[string]any{"type": "tool-search", "toolCallId": "c1", "state": "output-available", "input": map[string]any{"q": "x"}, "output": map[string]any{"n": 1}},
+			map[string]any{"type": "text", "text": "Done"}}},
+		map[string]any{"id": "u2", "role": "user", "parts": []any{map[string]any{"type": "text", "text": "More"}}},
+	}
+	if text, isErr := callTool(t, cs, "chat_with_agent", map[string]any{"agentId": testAgentID, "messages": msgs, "imageResponseFormat": "url"}); isErr {
+		t.Fatalf("tool error: %s", text)
+	}
+	want, _ := json.Marshal(map[string]any{"agentId": testAgentID, "stream": false, "imageResponseFormat": "url", "messages": msgs})
+	assertJSONEqual(t, fake.last(t).Body, string(want))
+}
+
+func TestChatWithAgentTimeoutHint(t *testing.T) {
+	cs, _ := connect(t, "k", map[string]fakeResponse{"POST /agent/v1/chat/completions": {524, ``}})
+	text, isErr := callTool(t, cs, "chat_with_agent", map[string]any{"agentId": testAgentID,
+		"messages": []any{map[string]any{"role": "user", "parts": []any{map[string]any{"type": "text", "text": "Hi"}}}}})
+	if !isErr || !strings.Contains(text, "100-second") {
+		t.Errorf("got %v %q", isErr, text)
 	}
 }

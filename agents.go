@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -94,6 +97,40 @@ type RemoveAgentActionsInput struct {
 	PublishOption
 }
 
+type DisableAgentInput struct {
+	AgentID  string `json:"agentId" jsonschema:"UUID of the agent"`
+	Disabled bool   `json:"disabled" jsonschema:"true disables the agent, false enables it again"`
+}
+
+type AgentMessageMetadata struct {
+	Attachments []string `json:"attachments,omitempty" jsonschema:"attachment UUIDs from upload_attachment"`
+}
+
+type AgentMessage struct {
+	ID   string `json:"id,omitempty" jsonschema:"unique message id; generated when omitted"`
+	Role string `json:"role"`
+	// Parts stay open maps, because assistant turns from earlier replies carry
+	// reasoning, tool-* and source-* parts that must be resent unchanged.
+	Parts    []map[string]any      `json:"parts" jsonschema:"content parts; user parts are {type: text, text} or {type: file, mediaType, url, filename?}; for follow-ups, add each returned assistant message as {id, role: assistant, parts: [{type: text, text: <content>}]}; parts from streaming clients (reasoning, tool-*, source-*) may also be resent unchanged"`
+	Metadata *AgentMessageMetadata `json:"metadata,omitempty"`
+}
+
+type AgentOutput struct {
+	Type   string         `json:"type" jsonschema:"shape of the structured output"`
+	Schema map[string]any `json:"schema,omitempty" jsonschema:"JSON Schema for object and array output"`
+	Enum   []string       `json:"enum,omitempty" jsonschema:"allowed values for enum output"`
+}
+
+type ChatWithAgentInput struct {
+	AgentID  string         `json:"agentId" jsonschema:"UUID of an agent shared with the API key"`
+	Messages []AgentMessage `json:"messages" jsonschema:"conversation so far in Vercel AI SDK UIMessage format, ending with the user's message (the API silently drops a trailing non-user message); resend earlier turns, including the agent's replies, for follow-ups, because the API keeps no conversation state"`
+	Output   *AgentOutput   `json:"output,omitempty" jsonschema:"request structured output, returned in the response's output field"`
+	MaxSteps int            `json:"maxSteps,omitempty" jsonschema:"maximum tool execution steps, 1-20"`
+	// ImageResponseFormat matters because b64_json images can push the reply
+	// past the 10 MB response limit.
+	ImageResponseFormat string `json:"imageResponseFormat,omitempty" jsonschema:"format of agent-generated images; prefer url, because b64_json can exceed the 10 MB response limit"`
+}
+
 const draftWarning = " The current list is read via get_agent, which returns the published version, so action changes that exist only in the draft are overwritten."
 
 func (s *Server) registerAgents() {
@@ -158,6 +195,35 @@ func (s *Server) registerAgents() {
 			at(sc, "actionIds").MinItems = ptr(1)
 		}),
 	}, s.removeAgentActions)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "disable_agent",
+		Description: "Disable an agent (disabled: true) so users can no longer chat with it, or enable it again (disabled: false). Needs workspace admin rights or the matching permission.",
+		Annotations: destructive,
+		InputSchema: schemaFor[DisableAgentInput](func(sc *jsonschema.Schema) {
+			at(sc, "agentId").Pattern = uuidPattern
+		}),
+	}, s.disableAgent)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "chat_with_agent",
+		Description: "Send a conversation to an agent and return its reply (non-streaming). The agent runs with its configured model, knowledge and actions, so a reply can trigger the agent's actions in connected systems. Langdock aborts requests that take longer than 100 seconds. Attach files with upload_attachment and the message's metadata.attachments.",
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(true)},
+		InputSchema: schemaFor[ChatWithAgentInput](func(sc *jsonschema.Schema) {
+			at(sc, "agentId").Pattern = uuidPattern
+			// Inferred slices also allow null, which would reach the API as [].
+			for _, p := range []*jsonschema.Schema{at(sc, "messages"), at(sc, "messages", "[]", "parts")} {
+				p.Type, p.Types, p.MinItems = "array", nil, ptr(1)
+			}
+			enum(sc, []string{"system", "user", "assistant"}, "messages", "[]", "role")
+			at(sc, "messages", "[]", "parts", "[]").Required = []string{"type"}
+			at(sc, "messages", "[]", "metadata", "attachments", "[]").Pattern = uuidPattern
+			enum(sc, []string{"object", "array", "enum"}, "output", "type")
+			at(sc, "maxSteps").Minimum = ptr(1.0)
+			at(sc, "maxSteps").Maximum = ptr(20.0)
+			enum(sc, []string{"url", "b64_json"}, "imageResponseFormat")
+		}),
+	}, s.chatWithAgent)
 }
 
 func agentSchema(sc *jsonschema.Schema) {
@@ -186,6 +252,50 @@ func agentSchema(sc *jsonschema.Schema) {
 // limit avoids rejecting input Langdock would accept.
 func publishSchema(sc *jsonschema.Schema) {
 	maxLen(sc, 500, "publishDescription")
+}
+
+func (s *Server) disableAgent(ctx context.Context, _ *mcp.CallToolRequest, in DisableAgentInput) (*mcp.CallToolResult, any, error) {
+	return s.call(ctx, http.MethodPatch, "/agent/v1/disable", in)
+}
+
+func (s *Server) chatWithAgent(ctx context.Context, _ *mcp.CallToolRequest, in ChatWithAgentInput) (*mcp.CallToolResult, any, error) {
+	if last := in.Messages[len(in.Messages)-1]; last.Role != "user" {
+		return nil, nil, fmt.Errorf("the last message must have role user, got %q; Langdock drops a trailing non-user message and would answer the previous turn again", last.Role)
+	}
+	msgs := make([]AgentMessage, len(in.Messages))
+	for i, m := range in.Messages {
+		if m.ID == "" {
+			m.ID = randomMessageID()
+		}
+		msgs[i] = m
+	}
+	body := map[string]any{"agentId": in.AgentID, "messages": msgs, "stream": false}
+	if in.Output != nil {
+		body["output"] = in.Output
+	}
+	if in.MaxSteps != 0 {
+		body["maxSteps"] = in.MaxSteps
+	}
+	if in.ImageResponseFormat != "" {
+		body["imageResponseFormat"] = in.ImageResponseFormat
+	}
+	// Completions may legitimately run up to Langdock's 100-second limit,
+	// beyond the default client timeout, but not for the upload client's ten
+	// minutes.
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	raw, err := s.client.doJSONSlow(ctx, http.MethodPost, "/agent/v1/chat/completions", body)
+	if err != nil {
+		return nil, nil, err
+	}
+	return textResult(raw), nil, nil
+}
+
+// randomMessageID avoids colliding with ids the caller chose for other turns.
+func randomMessageID() string {
+	b := make([]byte, 8)
+	rand.Read(b)
+	return "msg-" + hex.EncodeToString(b)
 }
 
 func (s *Server) getAgent(ctx context.Context, _ *mcp.CallToolRequest, in AgentRef) (*mcp.CallToolResult, any, error) {
