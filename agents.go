@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -140,7 +141,7 @@ func (s *Server) registerAgents() {
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "get_agent",
-		Description: "Get an agent's settings, actions, input fields, attachments and owner. Returns the published version, or the draft if the agent was never published. The API cannot list agents or change sharing; both are only possible in the Langdock UI.",
+		Description: "Get an agent's settings, actions, input fields, attachments and owner. Returns the published version, or the draft if the agent was never published. instruction has been observed to come back empty for agents that have one in the UI, so do not trust an empty instruction and never copy it back with update_agent. The API cannot list agents or change sharing; both are only possible in the Langdock UI.",
 		Annotations: readOnly,
 	}, s.getAgent)
 
@@ -152,7 +153,7 @@ func (s *Server) registerAgents() {
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "create_agent",
-		Description: "Create an agent owned by the API key's owner and shared with the key. model is required because the workspace may have no default model. The agent starts as a draft; set publish to make it live in the same call.",
+		Description: "Create an agent owned by the API key's owner and shared with the key. model is required because the workspace may have no default model. The agent starts as a draft; set publish to make it live in the same call. If the call fails with a 404, a 5xx or a network error, the agent may exist anyway: check the Langdock UI before retrying, because the API cannot list or delete agents.",
 		Annotations: additive,
 		InputSchema: schemaFor[CreateAgentInput](func(sc *jsonschema.Schema) {
 			agentSchema(sc)
@@ -309,7 +310,7 @@ func (s *Server) listAgentModels(ctx context.Context, _ *mcp.CallToolRequest, _ 
 func (s *Server) createAgent(ctx context.Context, _ *mcp.CallToolRequest, in CreateAgentInput) (*mcp.CallToolResult, any, error) {
 	raw, err := s.client.doJSON(ctx, http.MethodPost, "/agent/v1/create", in.AgentSettings)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, createAgentError(err)
 	}
 	if !in.Publish {
 		return textResult(raw), nil, nil
@@ -323,6 +324,18 @@ func (s *Server) createAgent(ctx context.Context, _ *mcp.CallToolRequest, in Cre
 		return nil, nil, fmt.Errorf("agent created, but its id could not be read to publish it: %s", raw)
 	}
 	return s.publishAfter(ctx, raw, created.Agent.ID, in.PublishOption)
+}
+
+// createAgentError warns against retrying when the create request may have
+// succeeded: Langdock has answered 404 "Agent not found" although it created the
+// agent, and the API cannot list or delete agents, so a retry leaves a duplicate
+// that only the UI can remove. 400 and 403 reliably mean nothing was created.
+func createAgentError(err error) error {
+	var apiErr *APIError
+	if errors.As(err, &apiErr) && apiErr.Status != http.StatusNotFound && apiErr.Status < 500 {
+		return err
+	}
+	return fmt.Errorf("%w. The agent may have been created anyway; check the Langdock UI before retrying, because the API cannot list or delete agents and a retry may create a duplicate", err)
 }
 
 func (s *Server) updateAgent(ctx context.Context, _ *mcp.CallToolRequest, in UpdateAgentInput) (*mcp.CallToolResult, any, error) {
