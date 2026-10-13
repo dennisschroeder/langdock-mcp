@@ -62,6 +62,10 @@ The API offers no endpoint to delete an integration.
 
 `create_agent` requires `model` (an `id` from `list_agent_models`), because a workspace may have no default model. The API cannot list agents or change who an agent is shared with; both are only possible in the Langdock UI.
 
+`create_agent` can fail with a 404, a 5xx or a network error although the agent was created; Langdock has been observed to answer `404 Agent not found` to a successful create. The tool then says so in its error. Check the Langdock UI before retrying, because the API cannot list or delete agents and a retry may leave a duplicate.
+
+`get_agent` has been observed to return an empty `instruction` for agents that have one in the UI. Do not trust an empty instruction, and never copy it back with `update_agent`, which would clear the real one.
+
 `disable_agent` disables an agent (`disabled: true`) or enables it again (`disabled: false`) and needs admin rights. `chat_with_agent` sends a conversation in Vercel AI SDK `UIMessage` format to an agent shared with the key and returns its reply; the API keeps no conversation state, so follow-ups resend the earlier turns. The reply returns each assistant message with a `content` string; a follow-up adds it as `{role: "assistant", parts: [{type: "text", text: content}]}`. Parts are open maps, so reasoning, tool and source parts from streaming clients can be resent unchanged too. Message ids are generated when omitted, `output` requests structured output, and `imageResponseFormat: url` keeps generated images within the 10 MB response limit. The agent runs its actions, so a chat can change connected systems. Langdock aborts non-streaming completions after 100 seconds with a 524. `upload_attachment` reads a local file and returns an `attachmentId` for a message's `metadata.attachments` or an agent's `attachments`; `delete_attachment` deletes it; it can no longer be referenced and cannot be restored through the API. Both attachment tools need the `KNOWLEDGE_FOLDER_API` scope.
 
 ## Audit log tools

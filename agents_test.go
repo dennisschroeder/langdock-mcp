@@ -323,3 +323,21 @@ func TestChatWithAgentTimeoutHint(t *testing.T) {
 		t.Errorf("got %v %q", isErr, text)
 	}
 }
+
+func TestCreateAgentWarnsAgainstRetryWhenOutcomeIsOpen(t *testing.T) {
+	for _, tc := range []struct {
+		status int
+		warn   bool
+	}{{404, true}, {500, true}, {502, true}, {400, false}, {403, false}} {
+		cs, _ := connect(t, "k", map[string]fakeResponse{
+			"POST /agent/v1/create": {tc.status, `{"error":"Agent not found"}`},
+		})
+		text, isErr := callTool(t, cs, "create_agent", map[string]any{"name": "Bot", "model": "m"})
+		if !isErr {
+			t.Fatalf("%d: expected tool error, got %s", tc.status, text)
+		}
+		if got := strings.Contains(text, "may have been created anyway"); got != tc.warn {
+			t.Errorf("%d: warning present = %v, want %v: %s", tc.status, got, tc.warn, text)
+		}
+	}
+}
