@@ -132,7 +132,7 @@ type ChatWithAgentInput struct {
 	ImageResponseFormat string `json:"imageResponseFormat,omitempty" jsonschema:"format of agent-generated images; prefer url, because b64_json can exceed the 10 MB response limit"`
 }
 
-const draftWarning = " The current list is read via get_agent, which returns the published version, so action changes that exist only in the draft are overwritten."
+const draftWarning = " The current list is read via get_agent, which returns the published version, so action changes that exist only in the draft are overwritten. With a key that only has use access to the agent, get_agent returns each connectionId as null, so actions are resent without it; whether Langdock then keeps their connections is unconfirmed."
 
 func (s *Server) registerAgents() {
 	readOnly := &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: ptr(true)}
@@ -141,7 +141,7 @@ func (s *Server) registerAgents() {
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "get_agent",
-		Description: "Get an agent's settings, actions, input fields, attachments and owner. Returns the published version, or the draft if the agent was never published. instruction has been observed to come back empty for agents that have one in the UI, so do not trust an empty instruction and never copy it back with update_agent. The API cannot list agents or change sharing; both are only possible in the Langdock UI.",
+		Description: "Get an agent's settings, actions, input fields, attachments and owner. Returns the published version, or the draft if the agent was never published. If the API key only has use access to the agent, not editor access, instruction comes back as an empty string and each action's connectionId as null, although both are set; an empty instruction therefore does not mean there is none, so never copy it back with update_agent. The API cannot list agents or change sharing; both are only possible in the Langdock UI.",
 		Annotations: readOnly,
 	}, s.getAgent)
 
@@ -424,8 +424,9 @@ func (s *Server) currentAgentActions(ctx context.Context, agentID string) ([]age
 	if env.Agent == nil {
 		return nil, fmt.Errorf("response has no agent: %s", raw)
 	}
-	// get_agent returns "connectionId": null on every action; dropping nulls
-	// keeps the resent entries within the documented request shape.
+	// get_agent returns "connectionId": null when the key only has use access
+	// to the agent; dropping nulls keeps the resent entries within the
+	// documented request shape.
 	for _, e := range env.Agent.Actions {
 		for k, v := range e {
 			if string(v) == "null" {
